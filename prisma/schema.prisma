@@ -1,0 +1,280 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─── Auth ───────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  bio           String?
+  country       String?
+  totalXp       Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts             Account[]
+  sessions             Session[]
+  placementTests       PlacementTest[]
+  roadmaps             Roadmap[]
+  lessonProgress       LessonProgress[]
+  streaks              Streak[]
+  userAchievements     UserAchievement[]
+  friendsInitiated     Friendship[]       @relation("FriendInitiator")
+  friendsReceived      Friendship[]       @relation("FriendReceiver")
+  studyGroupMembers    StudyGroupMember[]
+  streakGiftsSent      StreakGift[]       @relation("GiftSender")
+  streakGiftsReceived  StreakGift[]       @relation("GiftReceiver")
+  notifications        Notification[]
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ─── Placement Test ──────────────────────────────────────────────────────────
+
+model PlacementTest {
+  id          String   @id @default(cuid())
+  userId      String
+  language    String   // "english" | "thai"
+  level       String   // "A1"|"A2"|"B1"|"B2"|"C1"|"C2"
+  score       Int      // 0-100
+  answers     String   // JSON
+  completedAt DateTime @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roadmap Roadmap?
+}
+
+// ─── Roadmap ─────────────────────────────────────────────────────────────────
+
+model Roadmap {
+  id              String    @id @default(cuid())
+  userId          String
+  language        String
+  targetExam      String?   // "TOEIC"|"IELTS"|"general"|null
+  targetScore     Int?
+  currentLevel    String
+  targetLevel     String
+  startDate       DateTime  @default(now())
+  targetDate      DateTime
+  weeklyHours     Int       @default(7)
+  status          String    @default("active")
+  totalWeeks      Int
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  placementTestId String        @unique
+  placementTest   PlacementTest @relation(fields: [placementTestId], references: [id])
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weeks           RoadmapWeek[]
+}
+
+model RoadmapWeek {
+  id         String   @id @default(cuid())
+  roadmapId  String
+  weekNumber Int
+  theme      String
+  skills     String   // JSON array: ["vocabulary","grammar"]
+  status     String   @default("pending")
+  startDate  DateTime
+
+  roadmap Roadmap      @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  days    RoadmapDay[]
+}
+
+model RoadmapDay {
+  id          String    @id @default(cuid())
+  weekId      String
+  dayNumber   Int
+  lessonType  String
+  lessonId    String?
+  status      String    @default("pending")
+  completedAt DateTime?
+
+  week   RoadmapWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  lesson Lesson?     @relation(fields: [lessonId], references: [id])
+}
+
+// ─── Lessons ─────────────────────────────────────────────────────────────────
+
+model Lesson {
+  id          String   @id @default(cuid())
+  language    String
+  type        String   // "vocabulary"|"grammar"|"listening"|"reading"|"speaking"|"writing"|"pronunciation"
+  level       String
+  title       String
+  description String?
+  content     String   // JSON
+  duration    Int      @default(15)
+  xpReward    Int      @default(10)
+  createdAt   DateTime @default(now())
+
+  roadmapDays    RoadmapDay[]
+  lessonProgress LessonProgress[]
+}
+
+model LessonProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  lessonId    String
+  score       Int?
+  timeSpent   Int?
+  attempts    Int      @default(1)
+  completedAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+}
+
+// ─── Streaks ─────────────────────────────────────────────────────────────────
+
+model Streak {
+  id               String    @id @default(cuid())
+  userId           String
+  language         String
+  currentStreak    Int       @default(0)
+  longestStreak    Int       @default(0)
+  lastActivityDate DateTime?
+  frozenUntil      DateTime?
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, language])
+}
+
+model StreakGift {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  language   String
+  message    String?
+  sentAt     DateTime @default(now())
+
+  sender   User @relation("GiftSender",   fields: [senderId],   references: [id])
+  receiver User @relation("GiftReceiver", fields: [receiverId], references: [id])
+}
+
+// ─── Achievements ────────────────────────────────────────────────────────────
+
+model Achievement {
+  id          String @id @default(cuid())
+  code        String @unique
+  name        String
+  description String
+  icon        String
+  category    String // "streak"|"lesson"|"social"|"score"|"milestone"
+  xpReward    Int    @default(50)
+
+  userAchievements UserAchievement[]
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+  language      String?
+  earnedAt      DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement Achievement @relation(fields: [achievementId], references: [id])
+
+  @@unique([userId, achievementId])
+}
+
+// ─── Social ──────────────────────────────────────────────────────────────────
+
+model Friendship {
+  id          String   @id @default(cuid())
+  initiatorId String
+  receiverId  String
+  status      String   @default("pending") // "pending"|"accepted"|"blocked"
+  createdAt   DateTime @default(now())
+
+  initiator User @relation("FriendInitiator", fields: [initiatorId], references: [id])
+  receiver  User @relation("FriendReceiver",  fields: [receiverId],  references: [id])
+
+  @@unique([initiatorId, receiverId])
+}
+
+model StudyGroup {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  language    String
+  maxMembers  Int      @default(10)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  members StudyGroupMember[]
+}
+
+model StudyGroupMember {
+  id       String   @id @default(cuid())
+  groupId  String
+  userId   String
+  role     String   @default("member")
+  joinedAt DateTime @default(now())
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  data      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

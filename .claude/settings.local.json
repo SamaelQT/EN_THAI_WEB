@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git)",
+      "Read(//c/Users/quang.ho/Documents/**)",
+      "Bash(npx create-next-app@latest en-thai-web --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-git)",
+      "Bash(cp -r /c/Users/quang.ho/Documents/en-thai-web/. /c/Users/quang.ho/Documents/EN_THAI_WEB/)",
+      "Bash(rm -rf /c/Users/quang.ho/Documents/en-thai-web)",
+      "Bash(npm install *)",
+      "Bash(npx shadcn@latest add card input label badge progress tabs select textarea toast sonner)",
+      "Bash(npx shadcn@latest add card input label badge progress tabs select textarea sonner avatar separator)",
+      "Bash(npx prisma *)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)"
+    ]
+  }
+}
