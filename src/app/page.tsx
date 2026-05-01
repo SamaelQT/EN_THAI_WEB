@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-export default function Home() {
+export default async function Home() {
+  const session = await auth();
+  if (session?.user) redirect("/dashboard");
   return (
     <main className="min-h-screen flex flex-col">
       {/* Nav */}

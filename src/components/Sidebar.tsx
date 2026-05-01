@@ -14,7 +14,10 @@ import {
   User,
   LogOut,
   FlaskConical,
+  UsersRound,
 } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -22,6 +25,7 @@ const nav = [
   { href: "/roadmap", label: "Lộ trình", icon: Map },
   { href: "/lessons", label: "Bài học", icon: BookOpen },
   { href: "/friends", label: "Bạn bè", icon: Users },
+  { href: "/study-groups", label: "Nhóm học", icon: UsersRound },
   { href: "/profile", label: "Hồ sơ", icon: User },
 ];
 
@@ -74,15 +78,19 @@ export default function Sidebar({
             <p className="text-xs text-muted-foreground truncate">{user.email}</p>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2 text-muted-foreground"
-          onClick={() => signOut({ callbackUrl: "/" })}
-        >
-          <LogOut size={16} />
-          Đăng xuất
-        </Button>
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <NotificationBell />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex-1 justify-start gap-2 text-muted-foreground"
+            onClick={() => signOut({ callbackUrl: "/" })}
+          >
+            <LogOut size={16} />
+            Đăng xuất
+          </Button>
+        </div>
       </div>
     </aside>
   );

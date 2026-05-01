@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Flame, Trophy, Users, UserPlus, Check, X } from "lucide-react";
+import { Flame, Trophy, Users, UserPlus, Check, X, Medal } from "lucide-react";
 
 type FriendUser = {
   id: string; name: string | null; image: string | null; totalXp: number;
@@ -20,10 +20,19 @@ type FriendUser = {
 type Friend = { friendshipId: string; user: FriendUser };
 type Request = { id: string; initiator: { id: string; name: string | null; image: string | null } };
 
+type LeaderboardEntry = {
+  id: string;
+  name: string | null;
+  image: string | null;
+  totalXp: number;
+  streaks: { language: string; currentStreak: number }[];
+};
+
 type Props = {
   friends: Friend[];
   requests: Request[];
   currentUserId: string;
+  leaderboard: LeaderboardEntry[];
 };
 
 const LANG_META: Record<string, { flag: string; label: string }> = {
@@ -31,7 +40,7 @@ const LANG_META: Record<string, { flag: string; label: string }> = {
   thai: { flag: "🇹🇭", label: "Tiếng Thái" },
 };
 
-export default function FriendsClient({ friends, requests, currentUserId }: Props) {
+export default function FriendsClient({ friends, requests, currentUserId, leaderboard }: Props) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [adding, setAdding] = useState(false);
@@ -140,6 +149,7 @@ export default function FriendsClient({ friends, requests, currentUserId }: Prop
       <Tabs defaultValue="friends">
         <TabsList>
           <TabsTrigger value="friends">Bạn bè ({friends.length})</TabsTrigger>
+          <TabsTrigger value="leaderboard">Bảng xếp hạng</TabsTrigger>
           <TabsTrigger value="add">Thêm bạn</TabsTrigger>
         </TabsList>
 
@@ -157,6 +167,58 @@ export default function FriendsClient({ friends, requests, currentUserId }: Prop
               <FriendCard key={friendshipId} user={user} onGiftStreak={giftStreak} />
             ))
           )}
+        </TabsContent>
+
+        <TabsContent value="leaderboard" className="mt-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Medal size={18} className="text-yellow-500" />
+                Bảng xếp hạng XP
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {leaderboard.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">
+                  Thêm bạn bè để so sánh thành tích!
+                </p>
+              ) : (
+                leaderboard.map((entry, idx) => {
+                  const isMe = entry.id === currentUserId;
+                  const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
+                  const maxStreak = Math.max(...entry.streaks.map((s) => s.currentStreak), 0);
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg ${isMe ? "bg-primary/10 border border-primary/20" : "bg-muted/30"}`}
+                    >
+                      <div className="w-7 text-center font-bold text-sm text-muted-foreground">
+                        {medal ?? `#${idx + 1}`}
+                      </div>
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={entry.image ?? undefined} />
+                        <AvatarFallback>{entry.name?.charAt(0).toUpperCase() ?? "U"}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {entry.name}{isMe && <span className="text-xs text-muted-foreground ml-1">(bạn)</span>}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-0.5">
+                            <Flame size={11} className="text-orange-500" />{maxStreak}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 font-bold text-sm">
+                        <Trophy size={14} className="text-yellow-500" />
+                        {entry.totalXp.toLocaleString()} XP
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="add" className="mt-4">

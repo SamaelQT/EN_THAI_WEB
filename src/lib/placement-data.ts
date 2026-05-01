@@ -435,6 +435,44 @@ export const THAI_QUESTIONS: Question[] = [
     options: ["ตัว (tua)", "เล่ม (lêm)", "ใบ (bai)", "อัน (an)"],
     answer: 1,
   },
+  // ── B1 extra ─────────────────────────────────────────────────────
+  {
+    id: "th-v-b1-3",
+    section: "vocabulary",
+    level: "B1",
+    question: "'เปลี่ยนแปลง' (plìan-plæng) หมายถึง?",
+    options: ["To repeat", "To change", "To stop", "To begin"],
+    answer: 1,
+  },
+  {
+    id: "th-v-b1-4",
+    section: "vocabulary",
+    level: "B1",
+    question: "คำว่า 'เข้าใจ' (khâo-jai) หมายถึง?",
+    options: ["To enter", "To think", "To understand", "To remember"],
+    answer: 2,
+  },
+  {
+    id: "th-g-b1-3",
+    section: "grammar",
+    level: "B1",
+    question: "คำว่า 'เคย' (khoei) ใช้เพื่อแสดง?",
+    options: ["ความถี่ในปัจจุบัน", "ประสบการณ์ในอดีต", "ความตั้งใจในอนาคต", "ความสามารถ"],
+    answer: 1,
+  },
+  {
+    id: "th-r-b1-1",
+    section: "reading",
+    level: "B1",
+    question: "อ่าน: 'วันนี้อากาศดีมาก เหมาะสำหรับการออกกำลังกายกลางแจ้ง' ประโยคนี้แนะนำว่าอะไร?",
+    options: [
+      "ควรอยู่บ้าน",
+      "ควรออกไปออกกำลังกาย",
+      "อากาศไม่ดี",
+      "ไม่ควรออกกำลังกาย",
+    ],
+    answer: 1,
+  },
   // ── B2 ──────────────────────────────────────────────────────────
   {
     id: "th-v-b2-1",
@@ -442,6 +480,22 @@ export const THAI_QUESTIONS: Question[] = [
     level: "B2",
     question: "คำว่า 'วิเคราะห์' (wí-khráw) หมายถึง?",
     options: ["To create", "To analyze", "To destroy", "To compare"],
+    answer: 1,
+  },
+  {
+    id: "th-v-b2-2",
+    section: "vocabulary",
+    level: "B2",
+    question: "'ยืนยัน' (yeun-yan) หมายถึง?",
+    options: ["To deny", "To confirm", "To suggest", "To ignore"],
+    answer: 1,
+  },
+  {
+    id: "th-v-b2-3",
+    section: "vocabulary",
+    level: "B2",
+    question: "คำว่า 'ตรงประเด็น' (trong-prà-den) หมายถึง?",
+    options: ["Off-topic", "Relevant / to the point", "Confusing", "Formal"],
     answer: 1,
   },
   {
@@ -457,6 +511,28 @@ export const THAI_QUESTIONS: Question[] = [
     ],
     answer: 1,
   },
+  {
+    id: "th-g-b2-2",
+    section: "grammar",
+    level: "B2",
+    question: "ในภาษาไทยทางการ คำว่า 'ท่าน' ใช้แทน?",
+    options: ["I / me (formal)", "You / he / she (respectful)", "They", "We"],
+    answer: 1,
+  },
+  {
+    id: "th-r-b2-1",
+    section: "reading",
+    level: "B2",
+    question:
+      "อ่าน: 'บริษัทประกาศว่าจะขยายธุรกิจไปยังตลาดต่างประเทศในปีหน้า' ข้อความนี้หมายความว่า?",
+    options: [
+      "บริษัทจะปิดตัว",
+      "บริษัทจะเข้าสู่ตลาดต่างประเทศ",
+      "บริษัทลดขนาดลง",
+      "บริษัทจะเปลี่ยนผลิตภัณฑ์",
+    ],
+    answer: 1,
+  },
   // ── C1 ──────────────────────────────────────────────────────────
   {
     id: "th-v-c1-1",
@@ -464,6 +540,27 @@ export const THAI_QUESTIONS: Question[] = [
     level: "C1",
     question: "คำว่า 'ประนีประนอม' (prà-nii-prà-noom) หมายถึง?",
     options: ["To argue strongly", "To compromise", "To celebrate", "To investigate"],
+    answer: 1,
+  },
+  {
+    id: "th-v-c1-2",
+    section: "vocabulary",
+    level: "C1",
+    question: "'ดุลยพินิจ' (dun-yá-phí-nít) หมายถึง?",
+    options: ["Regulation", "Discretion / judgment", "Agreement", "Authority"],
+    answer: 1,
+  },
+  {
+    id: "th-g-c1-1",
+    section: "grammar",
+    level: "C1",
+    question: "สำนวน 'น้ำขึ้นให้รีบตัก' มีความหมายว่า?",
+    options: [
+      "ควรดื่มน้ำให้มาก",
+      "ควรฉวยโอกาสในขณะที่มี",
+      "น้ำท่วมเป็นอันตราย",
+      "ควรรอจังหวะที่เหมาะสม",
+    ],
     answer: 1,
   },
   {
@@ -480,6 +577,20 @@ export const THAI_QUESTIONS: Question[] = [
     ],
     answer: 1,
   },
+  {
+    id: "th-r-c1-2",
+    section: "reading",
+    level: "C1",
+    question:
+      "อ่าน: 'นโยบายดังกล่าวถูกวิพากษ์วิจารณ์ว่าขาดความโปร่งใสและเอื้อประโยชน์แก่กลุ่มทุนขนาดใหญ่' ผู้เขียนมีทัศนะอย่างไร?",
+    options: [
+      "สนับสนุนนโยบาย",
+      "วิจารณ์นโยบายเรื่องความโปร่งใสและความเป็นธรรม",
+      "เป็นกลาง",
+      "ไม่แสดงความคิดเห็น",
+    ],
+    answer: 1,
+  },
 ];
 
 export type Level = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
@@ -487,19 +598,26 @@ export type Level = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 const LEVEL_ORDER: Level[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
 export function scoreToLevel(score: number): Level {
-  if (score >= 90) return "C1";
-  if (score >= 75) return "B2";
-  if (score >= 58) return "B1";
-  if (score >= 40) return "A2";
-  if (score >= 20) return "A1";
+  if (score >= 95) return "C2";
+  if (score >= 85) return "C1";
+  if (score >= 70) return "B2";
+  if (score >= 52) return "B1";
+  if (score >= 35) return "A2";
   return "A1";
+}
+
+function fisherYatesShuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 export function getQuestionsForTest(language: "english" | "thai"): Question[] {
   const pool = language === "english" ? ENGLISH_QUESTIONS : THAI_QUESTIONS;
-  // Shuffle and pick up to 20 questions for the test
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, Math.min(20, shuffled.length));
+  return fisherYatesShuffle(pool).slice(0, Math.min(20, pool.length));
 }
 
 export function calculateScore(questions: Question[], answers: number[]): number {

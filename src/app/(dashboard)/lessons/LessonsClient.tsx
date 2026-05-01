@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle2, Lock, PlayCircle, BookOpen } from "lucide-react";
+import { CheckCircle2, Loader2, PlayCircle, BookOpen, Sparkles } from "lucide-react";
 
 // Built-in lesson content for the MVP (expandable via AI later)
 const LESSON_CONTENT: Record<string, any> = {
@@ -86,40 +85,68 @@ type Week = { id: string; weekNumber: number; theme: string; skills: string; sta
 type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number; weeks: Week[] };
 
 type Props = {
-  roadmap: Roadmap | null;
-  completedLessonIds: string[];
+  enRoadmap: Roadmap | null;
+  thRoadmap: Roadmap | null;
   defaultLang: string;
   userId: string;
 };
 
-type LessonViewState = "list" | "learning" | "quiz" | "done";
+type LessonViewState = "list" | "generating" | "learning" | "quiz" | "done";
 
-export default function LessonsClient({ roadmap, completedLessonIds, defaultLang, userId }: Props) {
+export default function LessonsClient({ enRoadmap, thRoadmap, defaultLang, userId }: Props) {
   const router = useRouter();
+  const [lang, setLang] = useState<string>(defaultLang);
+  const roadmap = lang === "english" ? enRoadmap : thRoadmap;
   const [lessonState, setLessonState] = useState<LessonViewState>("list");
   const [activeLesson, setActiveLesson] = useState<any>(null);
   const [activeLessonKey, setActiveLessonKey] = useState("");
+  const [activeDayId, setActiveDayId] = useState<string | null>(null);
+  const [lessonStartTime, setLessonStartTime] = useState<number>(0);
   const [quizIndex, setQuizIndex] = useState(0);
   const [quizAnswers, setQuizAnswers] = useState<number[]>([]);
   const [quizSelected, setQuizSelected] = useState<number | null>(null);
   const [quizScore, setQuizScore] = useState(0);
 
-  function openLesson(type: string, language: string, level: string) {
+  async function openLesson(type: string, language: string, level: string, dayId?: string) {
     const key = `${type}_${language}_${level}`;
-    const content = LESSON_CONTENT[key];
+    const cached = LESSON_CONTENT[key];
+    setActiveDayId(dayId ?? null);
 
-    if (!content) {
-      toast.info("Bài học này đang được chuẩn bị. Sử dụng AI để tạo nội dung!");
+    if (cached) {
+      setActiveLesson(cached);
+      setActiveLessonKey(key);
+      setLessonState("learning");
+      setLessonStartTime(Date.now());
+      setQuizIndex(0);
+      setQuizAnswers([]);
+      setQuizSelected(null);
+      setQuizScore(0);
       return;
     }
 
-    setActiveLesson(content);
+    // Generate via AI
     setActiveLessonKey(key);
-    setLessonState("learning");
-    setQuizIndex(0);
-    setQuizAnswers([]);
-    setQuizSelected(null);
-    setQuizScore(0);
+    setLessonState("generating");
+    try {
+      const res = await fetch("/api/lessons/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lessonType: type, language, level }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      LESSON_CONTENT[key] = data; // cache in memory for this session
+      setActiveLesson(data);
+      setLessonState("learning");
+      setLessonStartTime(Date.now());
+      setQuizIndex(0);
+      setQuizAnswers([]);
+      setQuizSelected(null);
+      setQuizScore(0);
+    } catch (e) {
+      toast.error("Không thể tạo bài học. Thử lại sau.");
+      setLessonState("list");
+    }
   }
 
   function startQuiz() {
@@ -153,7 +180,43 @@ export default function LessonsClient({ roadmap, completedLessonIds, defaultLang
     const score = Math.round((correctCount / total) * 100);
     setQuizScore(score);
     setLessonState("done");
-    toast.success(`Hoàn thành! ${score}% chính xác · +${score >= 70 ? 15 : 8} XP`);
+
+    try {
+      const [lessonType, language, level] = activeLessonKey.split("_");
+      const timeSpent = lessonStartTime > 0 ? Math.round((Date.now() - lessonStartTime) / 1000) : null;
+      const res = await fetch("/api/lessons/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lessonType, language, level, score, timeSpent, dayId: activeDayId }),
+      });
+      const data = await res.json();
+      const xp = data.xpGained ?? (score >= 70 ? 15 : 8);
+      toast.success(`Hoàn thành! ${score}% · +${xp} XP · 🔥 ${data.newStreak} ngày`);
+      if (data.weekAdvanced) {
+        toast.success("🎉 Hoàn thành tuần học! Tuần tiếp theo đã mở.", { duration: 5000 });
+      }
+      if (data.newAchievements?.length > 0) {
+        for (const name of data.newAchievements) {
+          toast.success(`🏅 Thành tích mới: ${name}`, { duration: 5000 });
+        }
+      }
+      router.refresh();
+    } catch {
+      toast.success(`Hoàn thành! ${score}% chính xác`);
+    }
+  }
+
+  // ── Generating screen ────────────────────────────────────────
+  if (lessonState === "generating") {
+    return (
+      <div className="max-w-md mx-auto text-center space-y-6 py-20">
+        <Loader2 className="mx-auto animate-spin text-primary" size={48} />
+        <div>
+          <h2 className="text-lg font-semibold">AI đang tạo bài học...</h2>
+          <p className="text-sm text-muted-foreground mt-1">Vui lòng chờ trong giây lát</p>
+        </div>
+      </div>
+    );
   }
 
   // ── Quiz screen ──────────────────────────────────────────────
@@ -268,11 +331,94 @@ export default function LessonsClient({ roadmap, completedLessonIds, defaultLang
                 if (line.startsWith("## ")) return <h3 key={i} className="text-base font-semibold">{line.slice(3)}</h3>;
                 if (line.startsWith("- ")) return <p key={i} className="text-sm">• {line.slice(2)}</p>;
                 if (line.startsWith("| ")) return null;
-                if (line.startsWith("- ")) return null;
                 return <p key={i} className="text-sm">{line}</p>;
               })}
             </CardContent>
           </Card>
+        )}
+
+        {/* Reading lesson */}
+        {activeLesson.passage && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Đoạn văn</CardTitle></CardHeader>
+            <CardContent>
+              <p className="text-sm leading-relaxed">{activeLesson.passage}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Listening simulation */}
+        {activeLesson.transcript && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">🎧 {activeLesson.context}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-relaxed whitespace-pre-line bg-muted/50 p-3 rounded-lg">{activeLesson.transcript}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Writing lesson */}
+        {activeLesson.prompt && (
+          <div className="space-y-3">
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-base">✏️ Đề bài</CardTitle></CardHeader>
+              <CardContent><p className="text-sm">{activeLesson.prompt}</p></CardContent>
+            </Card>
+            {activeLesson.tips && (
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-base">Gợi ý</CardTitle></CardHeader>
+                <CardContent>
+                  <ul className="space-y-1">
+                    {activeLesson.tips.map((tip: string, i: number) => (
+                      <li key={i} className="text-sm">• {tip}</li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+            {activeLesson.example && (
+              <Card className="border-dashed">
+                <CardHeader className="pb-2"><CardTitle className="text-base">Bài mẫu</CardTitle></CardHeader>
+                <CardContent><p className="text-sm italic text-muted-foreground">{activeLesson.example}</p></CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* Speaking lesson */}
+        {activeLesson.phrases && (
+          <div className="space-y-3">
+            <div className="grid gap-3">
+              {activeLesson.phrases.map((p: any, i: number) => (
+                <Card key={i}>
+                  <CardContent className="pt-4 pb-4">
+                    <p className="font-bold text-lg">{p.phrase}</p>
+                    <p className="text-sm text-muted-foreground">{p.phonetic}</p>
+                    <p className="text-primary font-medium mt-1">{p.meaning}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            {activeLesson.dialogue && (
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-base">Hội thoại mẫu</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {activeLesson.dialogue.map((line: any, i: number) => (
+                      <div key={i} className={`flex gap-2 ${line.speaker === "B" ? "flex-row-reverse" : ""}`}>
+                        <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${line.speaker === "A" ? "bg-muted" : "bg-primary/10"}`}>
+                          <p className="font-medium">{line.text}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{line.translation}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
 
         <Button onClick={startQuiz} size="lg" className="w-full">
@@ -283,14 +429,45 @@ export default function LessonsClient({ roadmap, completedLessonIds, defaultLang
   }
 
   // ── List screen ──────────────────────────────────────────────
+  const hasEn = !!enRoadmap;
+  const hasTh = !!thRoadmap;
+
+  const LangTabs = () => (
+    <div className="flex gap-2">
+      {(hasEn || !hasTh) && (
+        <Button
+          size="sm"
+          variant={lang === "english" ? "default" : "outline"}
+          onClick={() => { setLang("english"); setLessonState("list"); }}
+          className="gap-1.5"
+        >
+          🇬🇧 Tiếng Anh
+        </Button>
+      )}
+      {(hasTh || !hasEn) && (
+        <Button
+          size="sm"
+          variant={lang === "thai" ? "default" : "outline"}
+          onClick={() => { setLang("thai"); setLessonState("list"); }}
+          className="gap-1.5"
+        >
+          🇹🇭 Tiếng Thái
+        </Button>
+      )}
+    </div>
+  );
+
   if (!roadmap) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Bài học</h1>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h1 className="text-2xl font-bold">Bài học</h1>
+          <LangTabs />
+        </div>
         <Card>
           <CardContent className="pt-10 pb-10 text-center text-muted-foreground">
             <BookOpen className="mx-auto mb-3 opacity-30" size={48} />
-            <p>Bạn chưa có lộ trình học tập.</p>
+            <p>Bạn chưa có lộ trình {lang === "english" ? "Tiếng Anh" : "Tiếng Thái"}.</p>
             <Button className="mt-4" onClick={() => router.push("/placement")}>
               Làm bài kiểm tra đầu vào
             </Button>
@@ -300,7 +477,6 @@ export default function LessonsClient({ roadmap, completedLessonIds, defaultLang
     );
   }
 
-  const lang = roadmap.language;
   const currentLevel = roadmap.currentLevel;
 
   const lessonTypes = [
@@ -314,11 +490,12 @@ export default function LessonsClient({ roadmap, completedLessonIds, defaultLang
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Bài học</h1>
-        <p className="text-muted-foreground mt-1">
-          {lang === "english" ? "🇬🇧 Tiếng Anh" : "🇹🇭 Tiếng Thái"} · Trình độ {currentLevel}
-        </p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Bài học</h1>
+          <p className="text-muted-foreground mt-1">Trình độ {currentLevel}</p>
+        </div>
+        <LangTabs />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -342,7 +519,9 @@ export default function LessonsClient({ roadmap, completedLessonIds, defaultLang
                 {hasContent ? (
                   <PlayCircle className="text-primary" size={20} />
                 ) : (
-                  <Badge variant="outline" className="text-xs">Sắp ra</Badge>
+                  <Badge variant="secondary" className="text-xs gap-1">
+                    <Sparkles size={10} />AI
+                  </Badge>
                 )}
               </CardContent>
             </Card>
@@ -351,15 +530,20 @@ export default function LessonsClient({ roadmap, completedLessonIds, defaultLang
       </div>
 
       {/* Weekly plan */}
-      {roadmap.weeks.length > 0 && (
+      {roadmap.weeks.length > 0 && (() => {
+        const activeWeek = roadmap.weeks.find((w) => w.status === "active") ?? roadmap.weeks[0];
+        return (
         <div>
-          <h2 className="text-lg font-semibold mb-3">Kế hoạch tuần này</h2>
+          <h2 className="text-lg font-semibold mb-3">
+            Kế hoạch tuần này
+            <span className="text-sm font-normal text-muted-foreground ml-2">Tuần {activeWeek.weekNumber}: {activeWeek.theme}</span>
+          </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {roadmap.weeks[0]?.days.map((day) => (
+            {activeWeek.days.map((day) => (
               <Card
                 key={day.id}
                 className={`text-center p-3 cursor-pointer ${day.status === "completed" ? "bg-green-50 border-green-200" : "hover:bg-muted/50"}`}
-                onClick={() => day.status !== "completed" && openLesson(day.lessonType, lang, currentLevel)}
+                onClick={() => day.status !== "completed" && openLesson(day.lessonType, lang, currentLevel, day.id)}
               >
                 <p className="text-xs text-muted-foreground">Ngày {day.dayNumber}</p>
                 <p className="text-lg mt-1">{LESSON_TYPE_ICONS[day.lessonType] ?? "📌"}</p>
@@ -369,7 +553,8 @@ export default function LessonsClient({ roadmap, completedLessonIds, defaultLang
             ))}
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

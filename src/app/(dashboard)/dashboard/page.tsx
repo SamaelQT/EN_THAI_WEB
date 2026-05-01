@@ -13,12 +13,17 @@ export default async function DashboardPage() {
   const session = await auth();
   const uid = session!.user!.id!;
 
-  const [user, roadmaps, streaks, recentProgress, achievements, friends] =
+  const [user, roadmaps, streaks, recentProgress, achievements, friends, totalLessons] =
     await Promise.all([
       prisma.user.findUnique({ where: { id: uid }, select: { name: true, totalXp: true, createdAt: true } }),
       prisma.roadmap.findMany({
         where: { userId: uid },
-        include: { weeks: { where: { status: "active" }, include: { days: true }, take: 1 } },
+        include: {
+          weeks: {
+            include: { days: true },
+            orderBy: { weekNumber: "asc" },
+          },
+        },
         orderBy: { createdAt: "desc" },
       }),
       prisma.streak.findMany({ where: { userId: uid } }),
@@ -40,14 +45,13 @@ export default async function DashboardPage() {
           status: "accepted",
         },
       }),
+      prisma.lessonProgress.count({ where: { userId: uid } }),
     ]);
 
-  const enRoadmap = roadmaps.find((r) => r.language === "english");
-  const thRoadmap = roadmaps.find((r) => r.language === "thai");
-  const enStreak = streaks.find((s) => s.language === "english");
-  const thStreak = streaks.find((s) => s.language === "thai");
-
-  const totalLessons = await prisma.lessonProgress.count({ where: { userId: uid } });
+  const enRoadmap = roadmaps.find((r: (typeof roadmaps)[0]) => r.language === "english");
+  const thRoadmap = roadmaps.find((r: (typeof roadmaps)[0]) => r.language === "thai");
+  const enStreak = streaks.find((s: (typeof streaks)[0]) => s.language === "english");
+  const thStreak = streaks.find((s: (typeof streaks)[0]) => s.language === "thai");
 
   return (
     <div className="space-y-6">

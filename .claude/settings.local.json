@@ -11,7 +11,13 @@
       "Bash(npx shadcn@latest add card input label badge progress tabs select textarea sonner avatar separator)",
       "Bash(npx prisma *)",
       "Bash(npx tsc *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(node_modules/.bin/tsc.cmd --noEmit)",
+      "Bash(node node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(set DATABASE_URL=file:./prisma/dev.db)",
+      "Bash(New-Item -ItemType File -Path \"C:/Users/ASROCK/OneDrive/Desktop/EN_THAI_WEB/public/avatars/.gitkeep\" -Force)",
+      "Bash(Out-Null)"
     ]
   }
 }

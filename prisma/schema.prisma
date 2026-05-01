@@ -31,6 +31,7 @@ model User {
   friendsInitiated     Friendship[]       @relation("FriendInitiator")
   friendsReceived      Friendship[]       @relation("FriendReceiver")
   studyGroupMembers    StudyGroupMember[]
+  studyGroupMessages   StudyGroupMessage[]
   streakGiftsSent      StreakGift[]       @relation("GiftSender")
   streakGiftsReceived  StreakGift[]       @relation("GiftReceiver")
   notifications        Notification[]
@@ -250,7 +251,8 @@ model StudyGroup {
   createdById String
   createdAt   DateTime @default(now())
 
-  members StudyGroupMember[]
+  members  StudyGroupMember[]
+  messages StudyGroupMessage[]
 }
 
 model StudyGroupMember {
@@ -264,6 +266,17 @@ model StudyGroupMember {
   user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, userId])
+}
+
+model StudyGroupMessage {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Notification {

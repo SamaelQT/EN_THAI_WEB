@@ -27,6 +27,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Placement test not found" }, { status: 404 });
   }
 
+  // Validate targetScore range
+  if (targetScore !== null && targetScore !== undefined) {
+    if (targetExam === "TOEIC" && (targetScore < 10 || targetScore > 990)) {
+      return NextResponse.json({ error: "Điểm TOEIC phải từ 10 đến 990" }, { status: 400 });
+    }
+    if (targetExam === "IELTS" && (targetScore < 10 || targetScore > 90)) {
+      return NextResponse.json({ error: "Band IELTS phải từ 1.0 đến 9.0 (nhập × 10, vd: 65 = 6.5)" }, { status: 400 });
+    }
+  }
+
   const currentLevel = test.level as Level;
   const exam = targetExam as ExamTarget;
   const targetLevel = exam === "general" ? "B2" : getTargetLevel(exam, targetScore);
@@ -79,18 +89,13 @@ export async function POST(req: Request) {
           startDate: wp.startDate,
           status: wp.weekNumber === 1 ? "active" : "pending",
           days: {
-            create: wp.skills.flatMap((skill, dayIdx) => [
-              {
-                dayNumber: dayIdx * 2 + 1,
-                lessonType: skill,
-                status: "pending",
-              },
-              {
-                dayNumber: dayIdx * 2 + 2,
-                lessonType: "review",
-                status: "pending",
-              },
-            ]).slice(0, 7),
+            create: wp.skills.flatMap((skill, dayIdx) => {
+              const lessonDay = { dayNumber: dayIdx * 2 + 1, lessonType: skill, status: "pending" };
+              // Skip auto-review if skill is already review, or if it would exceed day 7
+              const reviewDayNumber = dayIdx * 2 + 2;
+              if (skill === "review" || reviewDayNumber > 7) return [lessonDay];
+              return [lessonDay, { dayNumber: reviewDayNumber, lessonType: "review", status: "pending" }];
+            }),
           },
         })),
       },

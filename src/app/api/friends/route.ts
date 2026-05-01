@@ -56,6 +56,24 @@ export async function POST(req: Request) {
 
   if (existing) {
     if (existing.status === "accepted") return NextResponse.json({ error: "Đã là bạn bè rồi" }, { status: 409 });
+
+    // Reciprocal: target already sent a request to us → auto-accept
+    if (existing.initiatorId === target.id && existing.receiverId === uid) {
+      await prisma.friendship.update({
+        where: { id: existing.id },
+        data: { status: "accepted" },
+      });
+      await prisma.notification.create({
+        data: {
+          userId: target.id,
+          type: "friend_accepted",
+          title: "Kết bạn thành công! 🎉",
+          body: `${session.user.name} đã chấp nhận yêu cầu kết bạn của bạn.`,
+        },
+      });
+      return NextResponse.json({ message: "Đã chấp nhận yêu cầu kết bạn ngược lại" }, { status: 200 });
+    }
+
     return NextResponse.json({ error: "Đã gửi yêu cầu rồi" }, { status: 409 });
   }
 

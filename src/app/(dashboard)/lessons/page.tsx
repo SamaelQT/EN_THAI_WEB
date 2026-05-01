@@ -12,9 +12,9 @@ export default async function LessonsPage({
   const params = await searchParams;
   const lang = params.lang ?? "english";
 
-  const [roadmap, completedLessonIds] = await Promise.all([
+  const [enRoadmap, thRoadmap] = await Promise.all([
     prisma.roadmap.findFirst({
-      where: { userId: uid, language: lang, status: "active" },
+      where: { userId: uid, language: "english", status: "active" },
       include: {
         weeks: {
           orderBy: { weekNumber: "asc" },
@@ -23,15 +23,22 @@ export default async function LessonsPage({
         },
       },
     }),
-    prisma.lessonProgress
-      .findMany({ where: { userId: uid }, select: { lessonId: true } })
-      .then((lps) => lps.map((lp) => lp.lessonId)),
+    prisma.roadmap.findFirst({
+      where: { userId: uid, language: "thai", status: "active" },
+      include: {
+        weeks: {
+          orderBy: { weekNumber: "asc" },
+          include: { days: { orderBy: { dayNumber: "asc" } } },
+          take: 4,
+        },
+      },
+    }),
   ]);
 
   return (
     <LessonsClient
-      roadmap={roadmap as any}
-      completedLessonIds={completedLessonIds}
+      enRoadmap={enRoadmap as any}
+      thRoadmap={thRoadmap as any}
       defaultLang={lang}
       userId={uid}
     />

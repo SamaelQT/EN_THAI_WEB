@@ -5,7 +5,16 @@ const { PrismaBetterSqlite3 } = require("@prisma/adapter-better-sqlite3");
 const Database = require("better-sqlite3");
 import path from "path";
 
-const dbPath = path.join(process.cwd(), "prisma", "dev.db");
+function resolveDbPath(): string {
+  const url = process.env.DATABASE_URL;
+  if (url?.startsWith("file:")) {
+    const p = url.slice(5); // strip "file:"
+    return path.isAbsolute(p) ? p : path.join(process.cwd(), p);
+  }
+  return path.join(process.cwd(), "prisma", "dev.db");
+}
+
+const dbPath = resolveDbPath();
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 

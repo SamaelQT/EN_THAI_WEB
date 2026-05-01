@@ -46,5 +46,32 @@ export default async function FriendsPage() {
     user: f.initiatorId === uid ? f.receiver : f.initiator,
   }));
 
-  return <FriendsClient friends={friends as any} requests={requests as any} currentUserId={uid} />;
+  // Leaderboard: current user + all friends, sorted by totalXp
+  const currentUser = await prisma.user.findUnique({
+    where: { id: uid },
+    select: {
+      id: true, name: true, image: true, totalXp: true,
+      streaks: { select: { language: true, currentStreak: true, longestStreak: true } },
+    },
+  });
+
+  const leaderboard = [
+    ...(currentUser ? [currentUser] : []),
+    ...friends.map((f) => ({
+      id: f.user.id,
+      name: f.user.name,
+      image: f.user.image,
+      totalXp: f.user.totalXp,
+      streaks: f.user.streaks,
+    })),
+  ].sort((a, b) => b.totalXp - a.totalXp);
+
+  return (
+    <FriendsClient
+      friends={friends as any}
+      requests={requests as any}
+      currentUserId={uid}
+      leaderboard={leaderboard as any}
+    />
+  );
 }

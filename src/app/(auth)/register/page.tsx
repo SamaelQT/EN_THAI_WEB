@@ -42,11 +42,17 @@ export default function RegisterPage() {
       return;
     }
 
-    await signIn("credentials", {
+    const signInResult = await signIn("credentials", {
       email: form.email,
       password: form.password,
       redirect: false,
     });
+
+    if (signInResult?.error) {
+      toast.error("Tài khoản đã tạo nhưng đăng nhập thất bại. Hãy đăng nhập lại.");
+      router.push("/login");
+      return;
+    }
 
     router.push("/placement");
     router.refresh();

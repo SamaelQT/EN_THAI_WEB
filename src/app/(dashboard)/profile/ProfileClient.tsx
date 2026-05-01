@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -11,8 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Flame, Trophy, BookOpen, Users, CalendarDays, Edit2, Check } from "lucide-react";
+import { Flame, Trophy, BookOpen, Users, CalendarDays, Edit2, Check, Camera, Loader2 } from "lucide-react";
 
 type Achievement = { id: string; earnedAt: Date; achievement: { name: string; description: string; icon: string; xpReward: number; category: string } };
 type Streak = { language: string; currentStreak: number; longestStreak: number };
@@ -43,6 +42,9 @@ export default function ProfileClient({ user, streaks, achievements, lessonCount
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     name: user.name ?? "",
     bio: user.bio ?? "",
@@ -51,6 +53,7 @@ export default function ProfileClient({ user, streaks, achievements, lessonCount
 
   const maxStreak = Math.max(...streaks.map((s) => s.longestStreak), 0);
   const title = getTitle(user.totalXp);
+  const currentImage = previewImage ?? user.image ?? undefined;
 
   async function save() {
     setSaving(true);
@@ -69,6 +72,32 @@ export default function ProfileClient({ user, streaks, achievements, lessonCount
     }
   }
 
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Local preview
+    const reader = new FileReader();
+    reader.onload = (ev) => setPreviewImage(ev.target?.result as string);
+    reader.readAsDataURL(file);
+
+    // Upload
+    setUploadingAvatar(true);
+    const fd = new FormData();
+    fd.append("avatar", file);
+    const res = await fetch("/api/user/avatar", { method: "POST", body: fd });
+    const data = await res.json();
+    setUploadingAvatar(false);
+
+    if (!res.ok) {
+      toast.error(data.error ?? "Upload thất bại");
+      setPreviewImage(null);
+      return;
+    }
+    toast.success("Ảnh đại diện đã cập nhật!");
+    router.refresh();
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Hồ sơ của tôi</h1>
@@ -77,10 +106,30 @@ export default function ProfileClient({ user, streaks, achievements, lessonCount
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-start gap-6 flex-wrap">
-            <Avatar className="h-20 w-20">
-              <AvatarImage src={user.image ?? undefined} />
-              <AvatarFallback className="text-2xl">{user.name?.charAt(0).toUpperCase() ?? "U"}</AvatarFallback>
-            </Avatar>
+            {/* Avatar with upload */}
+            <div className="relative shrink-0">
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={currentImage} />
+                <AvatarFallback className="text-2xl">
+                  {user.name?.charAt(0).toUpperCase() ?? "U"}
+                </AvatarFallback>
+              </Avatar>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute bottom-0 right-0 h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-md hover:bg-primary/90 transition-colors disabled:opacity-60"
+                title="Đổi ảnh đại diện"
+              >
+                {uploadingAvatar ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+            </div>
 
             <div className="flex-1 space-y-3">
               {editing ? (
