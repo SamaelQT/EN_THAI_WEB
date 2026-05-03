@@ -122,7 +122,10 @@ export async function POST(req: Request) {
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 503 });
+    return NextResponse.json({
+      error: "Bài học này chưa có sẵn. Vui lòng thử bài học khác hoặc liên hệ admin.",
+      code: "NO_API_KEY",
+    }, { status: 503 });
   }
 
   const message = await client.messages.create({
