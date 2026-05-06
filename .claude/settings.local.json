@@ -17,7 +17,8 @@
       "Bash(node node_modules/typescript/bin/tsc --noEmit)",
       "Bash(set DATABASE_URL=file:./prisma/dev.db)",
       "Bash(New-Item -ItemType File -Path \"C:/Users/ASROCK/OneDrive/Desktop/EN_THAI_WEB/public/avatars/.gitkeep\" -Force)",
-      "Bash(Out-Null)"
+      "Bash(Out-Null)",
+      "PowerShell(Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser)"
     ]
   }
 }
