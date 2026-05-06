@@ -6,9 +6,9 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { language, score, answers } = await req.json();
+  const { language, score, answers, level, testType } = await req.json();
   try {
-    const result = await submitPlacementTest(session.user.id, language, score, answers);
+    const result = await submitPlacementTest(session.user.id, language, score, answers, level, testType);
     return NextResponse.json(result);
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });

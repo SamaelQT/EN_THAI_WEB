@@ -2,7 +2,6 @@ export type Level = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 
 const LEVEL_ORDER: Level[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
-// Weeks needed to advance between adjacent levels (minimum)
 const WEEKS_PER_LEVEL_UP: Record<string, number> = {
   "A1→A2": 4,
   "A2→B1": 6,
@@ -13,7 +12,6 @@ const WEEKS_PER_LEVEL_UP: Record<string, number> = {
 
 export type ExamTarget = "TOEIC" | "IELTS" | "general";
 
-// TOEIC score → min level required
 const TOEIC_LEVEL: { score: number; level: Level }[] = [
   { score: 990, level: "C1" },
   { score: 785, level: "B2" },
@@ -22,7 +20,6 @@ const TOEIC_LEVEL: { score: number; level: Level }[] = [
   { score: 0, level: "A1" },
 ];
 
-// IELTS band → level
 const IELTS_LEVEL: { band: number; level: Level }[] = [
   { band: 8.0, level: "C2" },
   { band: 7.0, level: "C1" },
@@ -32,10 +29,7 @@ const IELTS_LEVEL: { band: number; level: Level }[] = [
   { band: 0, level: "A1" },
 ];
 
-export function getTargetLevel(
-  exam: ExamTarget,
-  targetScore: number
-): Level {
+export function getTargetLevel(exam: ExamTarget, targetScore: number): Level {
   if (exam === "TOEIC") {
     for (const entry of TOEIC_LEVEL) {
       if (targetScore >= entry.score) return entry.level;
@@ -43,14 +37,13 @@ export function getTargetLevel(
     return "A1";
   }
   if (exam === "IELTS") {
-    // targetScore stored as band * 10 (e.g. 65 = 6.5)
     const band = targetScore / 10;
     for (const entry of IELTS_LEVEL) {
       if (band >= entry.band) return entry.level;
     }
     return "A1";
   }
-  return "B1"; // general default
+  return "B1";
 }
 
 export function calculateRequiredWeeks(from: Level, to: Level): number {
@@ -83,12 +76,42 @@ export function isFeasible(
   return { feasible: true, minWeeks };
 }
 
-type WeekPlan = {
-  weekNumber: number;
-  theme: string;
-  skills: string[];
-  startDate: Date;
-};
+// ─── Scheduling helpers ───────────────────────────────────────────────────────
+
+/** Next date strictly after `from` that is not a busy day */
+export function nextNonBusyDate(from: Date, busyDays: number[]): Date {
+  const d = new Date(from);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 1);
+  while (busyDays.includes(d.getDay())) {
+    d.setDate(d.getDate() + 1);
+  }
+  return d;
+}
+
+/**
+ * Produce a list of `count` calendar dates starting from (and including) `startDate`,
+ * skipping any day whose getDay() is in busyDays.
+ */
+export function scheduleDates(startDate: Date, count: number, busyDays: number[]): Date[] {
+  const dates: Date[] = [];
+  const d = new Date(startDate);
+  d.setHours(0, 0, 0, 0);
+  // If startDate itself is a busy day, advance to first non-busy
+  while (busyDays.includes(d.getDay())) {
+    d.setDate(d.getDate() + 1);
+  }
+  while (dates.length < count) {
+    dates.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+    while (busyDays.includes(d.getDay())) {
+      d.setDate(d.getDate() + 1);
+    }
+  }
+  return dates;
+}
+
+// ─── Week themes ──────────────────────────────────────────────────────────────
 
 const ENGLISH_WEEK_THEMES: Record<Level, string[]> = {
   A1: [
@@ -212,49 +235,70 @@ const THAI_WEEK_THEMES: Record<Level, string[]> = {
   ],
 };
 
-const SKILL_ROTATION = [
-  ["vocabulary", "grammar"],
-  ["listening", "vocabulary"],
-  ["reading", "grammar"],
-  ["vocabulary", "speaking"],
-  ["writing", "vocabulary"],
-  ["grammar", "listening"],
-  ["review", "vocabulary"],
-];
+// All 7 skill types in a meaningful order for learning
+const SKILL_TYPES = ["vocabulary", "grammar", "listening", "reading", "speaking", "writing", "review"];
+
+/** Choose skills for a given week, cycling through all 7 types */
+function getWeekSkills(weekIdx: number, n: number): string[] {
+  const offset = (weekIdx * n) % SKILL_TYPES.length;
+  return Array.from({ length: n }, (_, i) => SKILL_TYPES[(offset + i) % SKILL_TYPES.length]);
+}
+
+// ─── Main generator ───────────────────────────────────────────────────────────
+
+export type WeekPlan = {
+  weekNumber: number;
+  theme: string;
+  skills: string[];
+  startDate: Date;
+  scheduledDates: Date[]; // one calendar date per lesson/skill
+};
 
 export function generateWeeklyPlan(
   language: "english" | "thai",
   fromLevel: Level,
   toLevel: Level,
   totalWeeks: number,
-  startDate: Date
+  startDate: Date,
+  busyDays: number[] = [],
+  weeklyHours = 7
 ): WeekPlan[] {
-  const themes =
-    language === "english" ? ENGLISH_WEEK_THEMES : THAI_WEEK_THEMES;
-
+  const themes = language === "english" ? ENGLISH_WEEK_THEMES : THAI_WEEK_THEMES;
   const fromIdx = LEVEL_ORDER.indexOf(fromLevel);
   const toIdx = LEVEL_ORDER.indexOf(toLevel);
 
-  // Collect themes across levels
   const allThemes: string[] = [];
   for (let i = fromIdx; i <= toIdx; i++) {
-    const lvl = LEVEL_ORDER[i];
-    allThemes.push(...(themes[lvl] ?? []));
+    allThemes.push(...(themes[LEVEL_ORDER[i]] ?? []));
   }
 
+  // Lessons per week: bounded by available days and weekly hours
+  const availableDaysPerWeek = Math.max(1, 7 - busyDays.length);
+  const lessonsPerWeek = Math.min(weeklyHours, availableDaysPerWeek);
+
+  // Build a flat list of all lesson dates across the entire roadmap
+  const totalLessons = totalWeeks * lessonsPerWeek;
+  const allDates = scheduleDates(startDate, totalLessons, busyDays);
+
   const plans: WeekPlan[] = [];
+  let lessonIdx = 0;
+
   for (let w = 0; w < totalWeeks; w++) {
-    const themeIdx = w % allThemes.length;
-    const skillIdx = w % SKILL_ROTATION.length;
     const weekStart = new Date(startDate);
     weekStart.setDate(weekStart.getDate() + w * 7);
 
+    const skills = getWeekSkills(w, lessonsPerWeek);
+    const scheduledDates = allDates.slice(lessonIdx, lessonIdx + lessonsPerWeek);
+    lessonIdx += lessonsPerWeek;
+
     plans.push({
       weekNumber: w + 1,
-      theme: allThemes[themeIdx] ?? `Ôn tập tuần ${w + 1}`,
-      skills: SKILL_ROTATION[skillIdx],
+      theme: allThemes[w % allThemes.length] ?? `Ôn tập tuần ${w + 1}`,
+      skills,
       startDate: weekStart,
+      scheduledDates,
     });
   }
+
   return plans;
 }

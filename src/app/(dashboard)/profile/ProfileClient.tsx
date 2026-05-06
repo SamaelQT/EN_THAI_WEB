@@ -203,7 +203,10 @@ export default function ProfileClient({ user, streaks, achievements, lessonCount
             {streaks.map((s) => (
               <div key={s.language} className="flex items-center justify-between">
                 <span className="font-medium">
-                  {s.language === "english" ? "🇬🇧 Tiếng Anh" : "🇹🇭 Tiếng Thái"}
+                  <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded mr-1 ${s.language === "english" ? "bg-blue-500" : "bg-red-500"}`}>
+                    {s.language === "english" ? "EN" : "TH"}
+                  </span>
+                  {s.language === "english" ? "Tiếng Anh" : "Tiếng Thái"}
                 </span>
                 <div className="flex items-center gap-4 text-sm">
                   <span className="flex items-center gap-1 text-orange-500 font-bold">

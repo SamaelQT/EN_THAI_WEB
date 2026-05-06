@@ -19,7 +19,11 @@
       "Bash(New-Item -ItemType File -Path \"C:/Users/ASROCK/OneDrive/Desktop/EN_THAI_WEB/public/avatars/.gitkeep\" -Force)",
       "Bash(Out-Null)",
       "PowerShell(Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser)",
-      "Bash(npm show *)"
+      "Bash(npm show *)",
+      "Bash(node -e ' *)",
+      "Bash(mkdir -p \"src/app/api/roadmap/[id]/busy-days\")",
+      "Bash(mkdir -p \"src/app/api/roadmap/[id]/reschedule-day\")",
+      "PowerShell($s = Get-Content \"node_modules/.prisma/client/index.js\" -Raw; $idx = $s.IndexOf\\(\"PlacementTest {`\\\\n  id\"\\); if \\($idx -gt 0\\) { $s.Substring\\($idx, 400\\) } else { \"not found\" })"
     ]
   }
 }

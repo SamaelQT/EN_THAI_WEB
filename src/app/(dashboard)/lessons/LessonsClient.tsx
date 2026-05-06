@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Loader2, PlayCircle, BookOpen, Sparkles } from "lucide-react";
+import CalendarView, { type LessonDay } from "./CalendarView";
 
 // Built-in lesson content for the MVP (expandable via AI later)
 const LESSON_CONTENT: Record<string, any> = {
@@ -70,33 +71,23 @@ const LESSON_CONTENT: Record<string, any> = {
   },
 };
 
-const LESSON_TYPE_ICONS: Record<string, string> = {
-  vocabulary: "📚",
-  grammar: "📝",
-  listening: "🎧",
-  reading: "📖",
-  speaking: "🗣️",
-  writing: "✏️",
-  review: "🔄",
-};
 
-type Day = { id: string; dayNumber: number; lessonType: string; status: string; lessonId: string | null };
-type Week = { id: string; weekNumber: number; theme: string; skills: string; status: string; days: Day[] };
-type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number; weeks: Week[] };
+type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number };
 
 type Props = {
   enRoadmap: Roadmap | null;
   thRoadmap: Roadmap | null;
+  lessonDays: LessonDay[];
   defaultLang: string;
   userId: string;
+  hasPlacementTest: boolean;
 };
 
 type LessonViewState = "list" | "generating" | "learning" | "quiz" | "done";
 
-export default function LessonsClient({ enRoadmap, thRoadmap, defaultLang, userId }: Props) {
+export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaultLang, userId, hasPlacementTest }: Props) {
   const router = useRouter();
   const [lang, setLang] = useState<string>(defaultLang);
-  const roadmap = lang === "english" ? enRoadmap : thRoadmap;
   const [lessonState, setLessonState] = useState<LessonViewState>("list");
   const [activeLesson, setActiveLesson] = useState<any>(null);
   const [activeLessonKey, setActiveLessonKey] = useState("");
@@ -431,53 +422,38 @@ export default function LessonsClient({ enRoadmap, thRoadmap, defaultLang, userI
   // ── List screen ──────────────────────────────────────────────
   const hasEn = !!enRoadmap;
   const hasTh = !!thRoadmap;
+  const hasAnyRoadmap = hasEn || hasTh;
 
-  const LangTabs = () => (
-    <div className="flex gap-2">
-      {(hasEn || !hasTh) && (
-        <Button
-          size="sm"
-          variant={lang === "english" ? "default" : "outline"}
-          onClick={() => { setLang("english"); setLessonState("list"); }}
-          className="gap-1.5"
-        >
-          🇬🇧 Tiếng Anh
-        </Button>
-      )}
-      {(hasTh || !hasEn) && (
-        <Button
-          size="sm"
-          variant={lang === "thai" ? "default" : "outline"}
-          onClick={() => { setLang("thai"); setLessonState("list"); }}
-          className="gap-1.5"
-        >
-          🇹🇭 Tiếng Thái
-        </Button>
-      )}
-    </div>
-  );
-
-  if (!roadmap) {
+  if (!hasAnyRoadmap) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <h1 className="text-2xl font-bold">Bài học</h1>
-          <LangTabs />
-        </div>
+        <h1 className="text-2xl font-bold">Bài học</h1>
         <Card>
           <CardContent className="pt-10 pb-10 text-center text-muted-foreground">
             <BookOpen className="mx-auto mb-3 opacity-30" size={48} />
-            <p>Bạn chưa có lộ trình {lang === "english" ? "Tiếng Anh" : "Tiếng Thái"}.</p>
-            <Button className="mt-4" onClick={() => router.push("/placement")}>
-              Làm bài kiểm tra đầu vào
-            </Button>
+            <p>Bạn chưa có lộ trình học nào.</p>
+            {hasPlacementTest ? (
+              <>
+                <p className="text-sm mt-1">Bạn đã có kết quả kiểm tra. Hãy tạo lộ trình!</p>
+                <Button className="mt-4" onClick={() => router.push("/roadmap")}>
+                  Tạo lộ trình ngay →
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm mt-1">Hoàn thành bài kiểm tra đầu vào để bắt đầu.</p>
+                <Button className="mt-4" onClick={() => router.push("/placement")}>
+                  Làm bài kiểm tra đầu vào
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  const currentLevel = roadmap.currentLevel;
+  const currentLevel = (lang === "english" ? enRoadmap : thRoadmap)?.currentLevel ?? "";
 
   const lessonTypes = [
     { type: "vocabulary", label: "Từ vựng", icon: "📚", desc: "Học từ mới theo chủ đề" },
@@ -493,68 +469,68 @@ export default function LessonsClient({ enRoadmap, thRoadmap, defaultLang, userI
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Bài học</h1>
-          <p className="text-muted-foreground mt-1">Trình độ {currentLevel}</p>
+          {currentLevel && <p className="text-muted-foreground mt-1">Trình độ {currentLevel}</p>}
         </div>
-        <LangTabs />
+        <div className="flex gap-2">
+          {hasEn && (
+            <Button size="sm" variant={lang === "english" ? "default" : "outline"}
+              onClick={() => { setLang("english"); setLessonState("list"); }}
+              className="gap-1.5">
+              <span className="text-[10px] font-bold text-white px-1 py-0.5 rounded bg-blue-500">EN</span>
+              Tiếng Anh
+            </Button>
+          )}
+          {hasTh && (
+            <Button size="sm" variant={lang === "thai" ? "default" : "outline"}
+              onClick={() => { setLang("thai"); setLessonState("list"); }}
+              className="gap-1.5">
+              <span className="text-[10px] font-bold text-white px-1 py-0.5 rounded bg-red-500">TH</span>
+              Tiếng Thái
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {lessonTypes.map(({ type, label, icon, desc }) => {
-          const key = `${type}_${lang}_${currentLevel}`;
-          const hasContent = !!LESSON_CONTENT[key];
-          return (
-            <Card
-              key={type}
-              className={`cursor-pointer transition-shadow hover:shadow-md ${!hasContent ? "opacity-70" : ""}`}
-              onClick={() => openLesson(type, lang, currentLevel)}
-            >
-              <CardContent className="pt-5 pb-4 flex items-center gap-4">
-                <div className="text-3xl w-12 h-12 flex items-center justify-center bg-muted rounded-xl">
-                  {icon}
-                </div>
-                <div className="flex-1">
-                  <p className="font-semibold">{label}</p>
-                  <p className="text-sm text-muted-foreground">{desc}</p>
-                </div>
-                {hasContent ? (
-                  <PlayCircle className="text-primary" size={20} />
-                ) : (
-                  <Badge variant="secondary" className="text-xs gap-1">
-                    <Sparkles size={10} />AI
-                  </Badge>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {/* Google Calendar-style schedule */}
+      <CalendarView
+        lessonDays={lessonDays}
+        onStartLesson={(type, language, level, dayId) => openLesson(type, language, level, dayId)}
+      />
 
-      {/* Weekly plan */}
-      {roadmap.weeks.length > 0 && (() => {
-        const activeWeek = roadmap.weeks.find((w) => w.status === "active") ?? roadmap.weeks[0];
-        return (
-        <div>
-          <h2 className="text-lg font-semibold mb-3">
-            Kế hoạch tuần này
-            <span className="text-sm font-normal text-muted-foreground ml-2">Tuần {activeWeek.weekNumber}: {activeWeek.theme}</span>
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {activeWeek.days.map((day) => (
+      {/* Free practice section */}
+      <div>
+        <h2 className="text-base font-semibold mb-3 text-muted-foreground">Luyện tập tự do</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {lessonTypes.map(({ type, label, icon, desc }) => {
+            const key = `${type}_${lang}_${currentLevel}`;
+            const hasContent = !!LESSON_CONTENT[key];
+            return (
               <Card
-                key={day.id}
-                className={`text-center p-3 cursor-pointer ${day.status === "completed" ? "bg-green-50 border-green-200" : "hover:bg-muted/50"}`}
-                onClick={() => day.status !== "completed" && openLesson(day.lessonType, lang, currentLevel, day.id)}
+                key={type}
+                className="cursor-pointer transition-shadow hover:shadow-md"
+                onClick={() => openLesson(type, lang, currentLevel)}
               >
-                <p className="text-xs text-muted-foreground">Ngày {day.dayNumber}</p>
-                <p className="text-lg mt-1">{LESSON_TYPE_ICONS[day.lessonType] ?? "📌"}</p>
-                <p className="text-xs font-medium mt-1 capitalize">{day.lessonType}</p>
-                {day.status === "completed" && <CheckCircle2 className="mx-auto mt-1 text-green-500" size={14} />}
+                <CardContent className="pt-4 pb-4 flex items-center gap-3">
+                  <div className="text-2xl w-10 h-10 flex items-center justify-center bg-muted rounded-lg shrink-0">
+                    {icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm">{label}</p>
+                    <p className="text-xs text-muted-foreground truncate">{desc}</p>
+                  </div>
+                  {hasContent ? (
+                    <PlayCircle className="text-primary shrink-0" size={16} />
+                  ) : (
+                    <Badge variant="secondary" className="text-xs gap-1 shrink-0">
+                      <Sparkles size={10} />AI
+                    </Badge>
+                  )}
+                </CardContent>
               </Card>
-            ))}
-          </div>
+            );
+          })}
         </div>
-        );
-      })()}
+      </div>
     </div>
   );
 }

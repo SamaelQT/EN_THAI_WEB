@@ -92,14 +92,16 @@ export default async function DashboardPage() {
       {/* Roadmaps */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <RoadmapWidget
-          flag="🇬🇧"
+          flag="EN"
+          flagColor="bg-blue-500"
           label="Tiếng Anh"
           roadmap={enRoadmap}
           streak={enStreak}
           lang="english"
         />
         <RoadmapWidget
-          flag="🇹🇭"
+          flag="TH"
+          flagColor="bg-red-500"
           label="Tiếng Thái"
           roadmap={thRoadmap}
           streak={thStreak}
@@ -190,19 +192,24 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
 }
 
 function RoadmapWidget({
-  flag, label, roadmap, streak, lang,
+  flag, flagColor, label, roadmap, streak, lang,
 }: {
   flag: string;
+  flagColor: string;
   label: string;
   roadmap: any;
   streak: any;
   lang: string;
 }) {
+  const FlagBadge = () => (
+    <span className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded ${flagColor}`}>{flag}</span>
+  );
+
   if (!roadmap) {
     return (
       <Card className="border-dashed">
         <CardContent className="pt-6 text-center space-y-3">
-          <span className="text-3xl">{flag}</span>
+          <FlagBadge />
           <p className="font-medium">{label}</p>
           <p className="text-sm text-muted-foreground">Chưa có lộ trình</p>
           <Link href="/placement">
@@ -222,7 +229,7 @@ function RoadmapWidget({
       <CardContent className="pt-5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 font-medium">
-            <span className="text-xl">{flag}</span> {label}
+            <FlagBadge /> {label}
           </div>
           <div className="flex items-center gap-1 text-orange-500 font-semibold text-sm">
             <Flame size={16} />

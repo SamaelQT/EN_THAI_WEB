@@ -597,6 +597,7 @@ export type Level = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 
 const LEVEL_ORDER: Level[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
+// Kept for server fallback only
 export function scoreToLevel(score: number): Level {
   if (score >= 95) return "C2";
   if (score >= 85) return "C1";
@@ -615,15 +616,46 @@ function fisherYatesShuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+// 4 câu mỗi level, random trong từng level, sau đó shuffle tổng
 export function getQuestionsForTest(language: "english" | "thai"): Question[] {
   const pool = language === "english" ? ENGLISH_QUESTIONS : THAI_QUESTIONS;
-  return fisherYatesShuffle(pool).slice(0, Math.min(20, pool.length));
+  const levels: Level[] = ["A1", "A2", "B1", "B2", "C1"];
+  const selected: Question[] = [];
+  for (const level of levels) {
+    const levelPool = pool.filter((q) => q.level === level);
+    selected.push(...fisherYatesShuffle(levelPool).slice(0, 4));
+  }
+  return fisherYatesShuffle(selected);
 }
 
-export function calculateScore(questions: Question[], answers: number[]): number {
-  let correct = 0;
+// Trọng số theo level: A1=1, A2=2, B1=3, B2=4, C1=5
+const LEVEL_WEIGHTS: Record<string, number> = { A1: 1, A2: 2, B1: 3, B2: 4, C1: 5 };
+const MAX_SCORE = 4 * (1 + 2 + 3 + 4 + 5); // 60
+
+// null = bỏ qua câu hỏi = 0 điểm
+export function calculateScore(questions: Question[], answers: (number | null)[]): number {
+  let earned = 0;
   for (let i = 0; i < questions.length; i++) {
-    if (answers[i] === questions[i].answer) correct++;
+    if (answers[i] === questions[i].answer) {
+      earned += LEVEL_WEIGHTS[questions[i].level] ?? 1;
+    }
   }
-  return Math.round((correct / questions.length) * 100);
+  return Math.round((earned / MAX_SCORE) * 100);
+}
+
+// Level = level cao nhất đúng ≥ 2/4 câu (bỏ qua = sai)
+export function determineLevel(questions: Question[], answers: (number | null)[]): Level {
+  const stats: Record<string, { correct: number; total: number }> = {};
+  for (let i = 0; i < questions.length; i++) {
+    const lvl = questions[i].level;
+    if (!stats[lvl]) stats[lvl] = { correct: 0, total: 0 };
+    stats[lvl].total++;
+    if (answers[i] === questions[i].answer) stats[lvl].correct++;
+  }
+  const order: Level[] = ["C1", "B2", "B1", "A2", "A1"];
+  for (const lvl of order) {
+    const s = stats[lvl];
+    if (s && s.correct / s.total >= 0.5) return lvl;
+  }
+  return "A1";
 }

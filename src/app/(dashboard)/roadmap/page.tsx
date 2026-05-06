@@ -20,6 +20,7 @@ export default async function RoadmapPage() {
     prisma.placementTest.findMany({
       where: { userId: uid },
       orderBy: { completedAt: "desc" },
+      select: { id: true, language: true, level: true, score: true, testType: true, completedAt: true },
     }),
   ]);
 

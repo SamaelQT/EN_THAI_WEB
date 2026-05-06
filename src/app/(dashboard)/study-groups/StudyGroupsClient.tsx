@@ -25,7 +25,7 @@ type Props = {
   currentUserId: string;
 };
 
-const LANG = { english: "🇬🇧 Tiếng Anh", thai: "🇹🇭 Tiếng Thái" };
+const LANG = { english: "Tiếng Anh (EN)", thai: "Tiếng Thái (TH)" };
 
 export default function StudyGroupsClient({ myGroups, publicGroups, currentUserId }: Props) {
   const router = useRouter();
@@ -191,8 +191,12 @@ export default function StudyGroupsClient({ myGroups, publicGroups, currentUserI
                     <Select value={form.language} onValueChange={(v) => setForm({ ...form, language: v ?? "english" })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="english">🇬🇧 Tiếng Anh</SelectItem>
-                        <SelectItem value="thai">🇹🇭 Tiếng Thái</SelectItem>
+                        <SelectItem value="english">
+                          <span className="text-[10px] font-bold text-white px-1 py-0.5 rounded bg-blue-500">EN</span> Tiếng Anh
+                        </SelectItem>
+                        <SelectItem value="thai">
+                          <span className="text-[10px] font-bold text-white px-1 py-0.5 rounded bg-red-500">TH</span> Tiếng Thái
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

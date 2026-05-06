@@ -8,6 +8,7 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
+    // busyDays defaults to [] in the service if not provided
     const roadmap = await createRoadmap(session.user.id, body);
     return NextResponse.json({ roadmap });
   } catch (e) {

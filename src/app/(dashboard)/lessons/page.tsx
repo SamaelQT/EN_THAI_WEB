@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import LessonsClient from "./LessonsClient";
+import type { LessonDay } from "./CalendarView";
 
 export default async function LessonsPage({
   searchParams,
@@ -12,14 +13,13 @@ export default async function LessonsPage({
   const params = await searchParams;
   const lang = params.lang ?? "english";
 
-  const [enRoadmap, thRoadmap] = await Promise.all([
+  const [enRoadmap, thRoadmap, testCount] = await Promise.all([
     prisma.roadmap.findFirst({
       where: { userId: uid, language: "english", status: "active" },
       include: {
         weeks: {
           orderBy: { weekNumber: "asc" },
           include: { days: { orderBy: { dayNumber: "asc" } } },
-          take: 4,
         },
       },
     }),
@@ -29,18 +29,51 @@ export default async function LessonsPage({
         weeks: {
           orderBy: { weekNumber: "asc" },
           include: { days: { orderBy: { dayNumber: "asc" } } },
-          take: 4,
         },
       },
     }),
+    prisma.placementTest.count({ where: { userId: uid } }),
   ]);
+
+  // Flatten all roadmap days into LessonDay[] for CalendarView
+  const lessonDays: LessonDay[] = [];
+  for (const roadmap of [enRoadmap, thRoadmap]) {
+    if (!roadmap) continue;
+    for (const week of roadmap.weeks) {
+      for (const day of week.days) {
+        lessonDays.push({
+          id: day.id,
+          dayNumber: day.dayNumber,
+          lessonType: day.lessonType,
+          scheduledDate: (day as any).scheduledDate ?? null,
+          status: day.status,
+          weekTheme: week.theme,
+          weekNumber: week.weekNumber,
+          language: roadmap.language,
+          roadmapId: roadmap.id,
+          currentLevel: roadmap.currentLevel,
+          busyDays: (roadmap as any).busyDays ?? [],
+        });
+      }
+    }
+  }
+
+  // Strip weeks from roadmap objects before passing (not needed by client)
+  const enRoadmapMeta = enRoadmap
+    ? { id: enRoadmap.id, language: enRoadmap.language, currentLevel: enRoadmap.currentLevel, targetLevel: enRoadmap.targetLevel, totalWeeks: enRoadmap.totalWeeks }
+    : null;
+  const thRoadmapMeta = thRoadmap
+    ? { id: thRoadmap.id, language: thRoadmap.language, currentLevel: thRoadmap.currentLevel, targetLevel: thRoadmap.targetLevel, totalWeeks: thRoadmap.totalWeeks }
+    : null;
 
   return (
     <LessonsClient
-      enRoadmap={enRoadmap as any}
-      thRoadmap={thRoadmap as any}
+      enRoadmap={enRoadmapMeta}
+      thRoadmap={thRoadmapMeta}
+      lessonDays={lessonDays}
       defaultLang={lang}
       userId={uid}
+      hasPlacementTest={testCount > 0}
     />
   );
 }
