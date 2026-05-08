@@ -32,11 +32,15 @@ model User {
   userAchievements     UserAchievement[]
   friendsInitiated     Friendship[]       @relation("FriendInitiator")
   friendsReceived      Friendship[]       @relation("FriendReceiver")
-  studyGroupMembers    StudyGroupMember[]
-  studyGroupMessages   StudyGroupMessage[]
+  studyGroupMembers         StudyGroupMember[]
+  studyGroupMessages        StudyGroupMessage[]
+  studyGroupInvitesSent     StudyGroupInvite[] @relation("InviteSent")
+  studyGroupInvitesReceived StudyGroupInvite[] @relation("InviteReceived")
   streakGiftsSent      StreakGift[]       @relation("GiftSender")
   streakGiftsReceived  StreakGift[]       @relation("GiftReceiver")
   notifications        Notification[]
+  quizParticipants     QuizParticipant[]
+  quizAnswers          QuizAnswer[]
 }
 
 model Account {
@@ -114,6 +118,8 @@ model Roadmap {
   totalWeeks      Int
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  learningFocus   String    @default("comprehensive")
 
   placementTestId String        @unique
   placementTest   PlacementTest @relation(fields: [placementTestId], references: [id])
@@ -259,8 +265,10 @@ model StudyGroup {
   createdById String
   createdAt   DateTime @default(now())
 
-  members  StudyGroupMember[]
-  messages StudyGroupMessage[]
+  members      StudyGroupMember[]
+  messages     StudyGroupMessage[]
+  invites      StudyGroupInvite[]
+  quizSessions QuizSession[]
 }
 
 model StudyGroupMember {
@@ -287,6 +295,20 @@ model StudyGroupMessage {
   user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model StudyGroupInvite {
+  id        String   @id @default(cuid()) @map("_id")
+  groupId   String
+  inviterId String
+  inviteeId String
+  // pending_admin | pending_invitee | accepted | rejected
+  status    String   @default("pending_admin")
+  createdAt DateTime @default(now())
+
+  group   StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  inviter User       @relation("InviteSent",     fields: [inviterId], references: [id])
+  invitee User       @relation("InviteReceived", fields: [inviteeId], references: [id])
+}
+
 model Notification {
   id        String   @id @default(cuid()) @map("_id")
   userId    String
@@ -298,4 +320,82 @@ model Notification {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Review / Ôn tập ─────────────────────────────────────────────────────────
+
+model ReviewSet {
+  id          String   @id @default(cuid()) @map("_id")
+  language    String   // english | thai
+  // vocabulary | grammar | quiz_15 | quiz_30 | simulation_b1 | simulation_toeic
+  type        String
+  topic       String   // e.g. "travel", "past_simple", "random_vocab"
+  level       String   // A1 | A2 | B1 | B2 | C1
+  title       String
+  description String?
+  duration    Int      // phút (15 hoặc 30)
+  createdAt   DateTime @default(now())
+
+  questions    ReviewQuestion[]
+  quizSessions QuizSession[]
+}
+
+model ReviewQuestion {
+  id          String   @id @default(cuid()) @map("_id")
+  reviewSetId String
+  order       Int
+  question    String
+  options     String[] // 4 lựa chọn
+  answer      Int      // index đáp án đúng (0-3)
+  explanation String?
+
+  reviewSet ReviewSet @relation(fields: [reviewSetId], references: [id], onDelete: Cascade)
+}
+
+// ─── Group Quiz ───────────────────────────────────────────────────────────────
+
+model QuizSession {
+  id              String    @id @default(cuid()) @map("_id")
+  groupId         String
+  reviewSetId     String
+  createdById     String
+  // waiting | active | finished
+  status          String    @default("waiting")
+  currentQuestion Int       @default(0)
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  group        StudyGroup        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  reviewSet    ReviewSet         @relation(fields: [reviewSetId], references: [id])
+  participants QuizParticipant[]
+  answers      QuizAnswer[]
+}
+
+model QuizParticipant {
+  id        String   @id @default(cuid()) @map("_id")
+  sessionId String
+  userId    String
+  score     Int      @default(0)
+  joinedAt  DateTime @default(now())
+
+  session QuizSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id])
+
+  @@unique([sessionId, userId])
+}
+
+model QuizAnswer {
+  id            String   @id @default(cuid()) @map("_id")
+  sessionId     String
+  userId        String
+  questionIndex Int
+  answer        Int      // index đáp án user chọn
+  isCorrect     Boolean
+  answeredAt    DateTime @default(now())
+
+  session QuizSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id])
+
+  @@unique([sessionId, userId, questionIndex])
 }

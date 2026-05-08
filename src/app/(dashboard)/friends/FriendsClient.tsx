@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,7 @@ export default function FriendsClient({ friends, requests, currentUserId, leader
   const [email, setEmail] = useState("");
   const [adding, setAdding] = useState(false);
   const [responding, setResponding] = useState<string | null>(null);
+  const [giftedKeys, setGiftedKeys] = useState<Set<string>>(new Set());
 
   async function sendRequest(e: React.FormEvent) {
     e.preventDefault();
@@ -79,12 +81,14 @@ export default function FriendsClient({ friends, requests, currentUserId, leader
   }
 
   async function giftStreak(receiverId: string, language: string) {
+    const key = `${receiverId}_${language}`;
     const res = await fetch("/api/streak/gift", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ receiverId, language, message: "Tiếp tục cố gắng nhé! 🔥" }),
     });
     if (res.ok) {
+      setGiftedKeys((prev) => new Set([...prev, key]));
       toast.success("Đã trao lửa cho bạn bè! 🔥");
     } else {
       toast.error("Không thể trao lửa lúc này.");
@@ -164,7 +168,7 @@ export default function FriendsClient({ friends, requests, currentUserId, leader
             </Card>
           ) : (
             friends.map(({ friendshipId, user }) => (
-              <FriendCard key={friendshipId} user={user} onGiftStreak={giftStreak} />
+              <FriendCard key={friendshipId} user={user} onGiftStreak={giftStreak} giftedKeys={giftedKeys} />
             ))
           )}
         </TabsContent>
@@ -187,11 +191,8 @@ export default function FriendsClient({ friends, requests, currentUserId, leader
                   const isMe = entry.id === currentUserId;
                   const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : null;
                   const maxStreak = Math.max(...entry.streaks.map((s) => s.currentStreak), 0);
-                  return (
-                    <div
-                      key={entry.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg ${isMe ? "bg-primary/10 border border-primary/20" : "bg-muted/30"}`}
-                    >
+                  const inner = (
+                    <>
                       <div className="w-7 text-center font-bold text-sm text-muted-foreground">
                         {medal ?? `#${idx + 1}`}
                       </div>
@@ -213,7 +214,23 @@ export default function FriendsClient({ friends, requests, currentUserId, leader
                         <Trophy size={14} className="text-yellow-500" />
                         {entry.totalXp.toLocaleString()} XP
                       </div>
+                    </>
+                  );
+                  return isMe ? (
+                    <div
+                      key={entry.id}
+                      className="flex items-center gap-3 p-3 rounded-lg bg-primary/10 border border-primary/20"
+                    >
+                      {inner}
                     </div>
+                  ) : (
+                    <Link
+                      key={entry.id}
+                      href={`/profile/${entry.id}`}
+                      className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/60 transition-colors"
+                    >
+                      {inner}
+                    </Link>
                   );
                 })
               )}
@@ -251,7 +268,7 @@ export default function FriendsClient({ friends, requests, currentUserId, leader
   );
 }
 
-function FriendCard({ user, onGiftStreak }: { user: FriendUser; onGiftStreak: (id: string, lang: string) => void }) {
+function FriendCard({ user, onGiftStreak, giftedKeys }: { user: FriendUser; onGiftStreak: (id: string, lang: string) => void; giftedKeys: Set<string> }) {
   const maxStreak = Math.max(...user.streaks.map((s) => s.currentStreak), 0);
   const longestStreak = Math.max(...user.streaks.map((s) => s.longestStreak), 0);
 
@@ -260,13 +277,13 @@ function FriendCard({ user, onGiftStreak }: { user: FriendUser; onGiftStreak: (i
       <CardContent className="pt-5 space-y-4">
         {/* User header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <Link href={`/profile/${user.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity">
             <Avatar>
               <AvatarImage src={user.image ?? undefined} />
               <AvatarFallback>{user.name?.charAt(0).toUpperCase() ?? "U"}</AvatarFallback>
             </Avatar>
             <div>
-              <p className="font-semibold">{user.name}</p>
+              <p className="font-semibold hover:underline">{user.name}</p>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Flame size={14} className="text-orange-500" />
@@ -278,7 +295,7 @@ function FriendCard({ user, onGiftStreak }: { user: FriendUser; onGiftStreak: (i
                 </span>
               </div>
             </div>
-          </div>
+          </Link>
         </div>
 
         {/* Roadmaps */}
@@ -291,7 +308,10 @@ function FriendCard({ user, onGiftStreak }: { user: FriendUser; onGiftStreak: (i
               return (
                 <div key={r.language} className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
-                    <span>{meta?.flag} {meta?.label}: {r.currentLevel} → {r.targetLevel}</span>
+                    <span className="flex items-center gap-1.5">
+                      {meta && <span className={`text-[10px] font-bold text-white px-1 py-0.5 rounded ${meta.color}`}>{meta.flag}</span>}
+                      {meta?.label}: {r.currentLevel} → {r.targetLevel}
+                    </span>
                     <span className="text-muted-foreground">{progress}%</span>
                   </div>
                   <Progress value={progress} className="h-1.5" />
@@ -306,16 +326,18 @@ function FriendCard({ user, onGiftStreak }: { user: FriendUser; onGiftStreak: (i
           <div className="flex gap-2 flex-wrap">
             {user.streaks.map((s) => {
               const meta = LANG_META[s.language];
+              const gifted = giftedKeys.has(`${user.id}_${s.language}`);
               return (
                 <Button
                   key={s.language}
                   size="sm"
                   variant="outline"
                   className="gap-1"
+                  disabled={gifted}
                   onClick={() => onGiftStreak(user.id, s.language)}
                 >
-                  <Flame size={14} className="text-orange-500" />
-                  Trao lửa {meta?.label}
+                  <Flame size={14} className={gifted ? "text-muted-foreground" : "text-orange-500"} />
+                  {gifted ? "Đã trao lửa" : `Trao lửa ${meta?.label}`}
                 </Button>
               );
             })}

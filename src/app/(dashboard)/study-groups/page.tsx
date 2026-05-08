@@ -6,28 +6,19 @@ export default async function StudyGroupsPage() {
   const session = await auth();
   const uid = session!.user!.id!;
 
-  const [myGroups, publicGroups] = await Promise.all([
-    prisma.studyGroup.findMany({
-      where: { members: { some: { userId: uid } } },
-      include: {
-        members: { include: { user: { select: { id: true, name: true, image: true } } } },
-      },
-    }),
-    prisma.studyGroup.findMany({
-      where: { members: { none: { userId: uid } } },
-      include: {
-        members: { include: { user: { select: { id: true, name: true, image: true } } } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    }),
-  ]);
+  const myGroups = await prisma.studyGroup.findMany({
+    where: { members: { some: { userId: uid } } },
+    include: {
+      members: { include: { user: { select: { id: true, name: true, image: true } } } },
+    },
+  });
 
   return (
     <StudyGroupsClient
       myGroups={myGroups as any}
-      publicGroups={publicGroups as any}
       currentUserId={uid}
+      currentUserName={session!.user!.name ?? null}
+      currentUserImage={session!.user!.image ?? null}
     />
   );
 }

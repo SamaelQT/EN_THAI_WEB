@@ -9,13 +9,14 @@ export default async function PlacementPage() {
     orderBy: { completedAt: "desc" },
   });
 
-  const englishTest = tests.find((t) => t.language === "english");
-  const thaiTest = tests.find((t) => t.language === "thai");
+  const englishTest = tests.find((t) => t.language === "english") ?? null;
+  const thaiTest    = tests.find((t) => t.language === "thai")    ?? null;
 
   return (
     <PlacementTestClient
-      englishTest={englishTest ?? null}
-      thaiTest={thaiTest ?? null}
+      englishTest={englishTest}
+      thaiTest={thaiTest}
+      allTests={tests}
     />
   );
 }

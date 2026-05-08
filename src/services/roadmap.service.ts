@@ -9,6 +9,20 @@ import {
   type ExamTarget,
 } from "@/lib/roadmap-generator";
 
+// CU-TFL levels map to CEFR equivalents for roadmap generation
+const CUTFL_TO_CEFR: Record<string, Level> = {
+  "Level 1": "A1",
+  "Level 2": "A2",
+  "Level 3": "B1",
+  "Level 4": "B2",
+  "Level 5": "C1",
+};
+
+/** Convert any level string to a CEFR Level for internal computation */
+function toCefrLevel(level: string): Level {
+  return CUTFL_TO_CEFR[level] ?? (level as Level);
+}
+
 export class RoadmapServiceError extends Error {
   constructor(message: string, public status: number, public extra?: object) {
     super(message);
@@ -22,6 +36,8 @@ export async function createRoadmap(
     placementTestId: string;
     targetExam: string;
     targetScore?: number | null;
+    targetLevel?: string | null;  // user-selected for CEFR / CU-TFL exams
+    learningFocus?: string;
     targetDate: string;
     weeklyHours?: number;
     busyDays?: number[];
@@ -35,6 +51,7 @@ export async function createRoadmap(
     targetDate,
     weeklyHours = 7,
     busyDays = [],
+    learningFocus = "comprehensive",
   } = opts;
 
   const test = await prisma.placementTest.findUnique({ where: { id: placementTestId } });
@@ -47,9 +64,22 @@ export async function createRoadmap(
       throw new RoadmapServiceError("Band IELTS phải từ 1.0 đến 9.0 (nhập × 10, vd: 65 = 6.5)", 400);
   }
 
-  const currentLevel = test.level as Level;
-  const exam = targetExam as ExamTarget;
-  const targetLevel = exam === "general" ? "B2" : getTargetLevel(exam, targetScore ?? 0);
+  // Normalize current level from test (handles CU-TFL "Level N" → CEFR)
+  const currentLevel = toCefrLevel(test.level);
+
+  // Resolve target level:
+  //  - If user explicitly selected one (CEFR / CU-TFL flows), honour it
+  //  - For TOEIC / IELTS, derive from target score
+  //  - Fallback: B2
+  let targetLevel: Level;
+  if (opts.targetLevel) {
+    targetLevel = toCefrLevel(opts.targetLevel);
+  } else {
+    const exam = targetExam as ExamTarget;
+    targetLevel = (exam === "TOEIC" || exam === "IELTS")
+      ? getTargetLevel(exam, targetScore ?? 0)
+      : "B2";
+  }
 
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -69,7 +99,8 @@ export async function createRoadmap(
     availableWeeks,
     start,
     busyDays,
-    weeklyHours
+    weeklyHours,
+    learningFocus
   );
 
   await prisma.roadmap.deleteMany({ where: { userId, language } });
@@ -82,6 +113,7 @@ export async function createRoadmap(
       targetScore: targetScore ?? null,
       currentLevel,
       targetLevel,
+      learningFocus,
       startDate: start,
       targetDate: end,
       weeklyHours,

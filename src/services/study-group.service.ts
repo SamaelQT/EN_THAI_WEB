@@ -67,6 +67,100 @@ export async function leaveOrDissolveGroup(userId: string, groupId: string) {
   return { message: "Đã rời nhóm" };
 }
 
+const userSelect = { id: true, name: true, image: true };
+
+export async function createInvite(inviterId: string, groupId: string, inviteeId: string) {
+  const myMembership = await prisma.studyGroupMember.findUnique({ where: { groupId_userId: { groupId, userId: inviterId } } });
+  if (!myMembership) throw new StudyGroupError("Bạn không trong nhóm này", 403);
+
+  const friendship = await prisma.friendship.findFirst({
+    where: {
+      OR: [{ initiatorId: inviterId, receiverId: inviteeId }, { initiatorId: inviteeId, receiverId: inviterId }],
+      status: "accepted",
+    },
+  });
+  if (!friendship) throw new StudyGroupError("Người dùng này chưa là bạn bè của bạn", 403);
+
+  const alreadyMember = await prisma.studyGroupMember.findUnique({ where: { groupId_userId: { groupId, userId: inviteeId } } });
+  if (alreadyMember) throw new StudyGroupError("Người dùng đã trong nhóm", 409);
+
+  const activePending = await prisma.studyGroupInvite.findFirst({
+    where: { groupId, inviteeId, status: { in: ["pending_admin", "pending_invitee"] } },
+  });
+  if (activePending) throw new StudyGroupError("Đã có lời mời đang chờ cho người này", 409);
+
+  const group = await prisma.studyGroup.findUnique({ where: { id: groupId }, include: { members: true } });
+  if (!group) throw new StudyGroupError("Không tìm thấy nhóm", 404);
+  if (group.members.length >= group.maxMembers) throw new StudyGroupError("Nhóm đã đầy", 409);
+
+  const isAdmin = myMembership.role === "admin";
+  const status = isAdmin ? "pending_invitee" : "pending_admin";
+
+  await prisma.studyGroupInvite.create({ data: { groupId, inviterId, inviteeId, status } });
+  return { status };
+}
+
+export async function getGroupPendingInvites(requesterId: string, groupId: string) {
+  const membership = await prisma.studyGroupMember.findUnique({ where: { groupId_userId: { groupId, userId: requesterId } } });
+  if (membership?.role !== "admin") throw new StudyGroupError("Chỉ admin mới xem được", 403);
+
+  return prisma.studyGroupInvite.findMany({
+    where: { groupId, status: "pending_admin" },
+    include: { inviter: { select: userSelect }, invitee: { select: userSelect } },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function adminRespondInvite(adminId: string, groupId: string, inviteId: string, action: "approve" | "reject") {
+  const membership = await prisma.studyGroupMember.findUnique({ where: { groupId_userId: { groupId, userId: adminId } } });
+  if (membership?.role !== "admin") throw new StudyGroupError("Chỉ admin mới duyệt được", 403);
+
+  const invite = await prisma.studyGroupInvite.findUnique({ where: { id: inviteId } });
+  if (!invite || invite.groupId !== groupId) throw new StudyGroupError("Không tìm thấy lời mời", 404);
+  if (invite.status !== "pending_admin") throw new StudyGroupError("Lời mời không hợp lệ", 409);
+
+  const newStatus = action === "approve" ? "pending_invitee" : "rejected";
+  await prisma.studyGroupInvite.update({ where: { id: inviteId }, data: { status: newStatus } });
+  return { status: newStatus };
+}
+
+export async function getMyInvites(userId: string) {
+  return prisma.studyGroupInvite.findMany({
+    where: { inviteeId: userId, status: "pending_invitee" },
+    include: {
+      inviter: { select: userSelect },
+      group: {
+        include: { members: { select: { id: true } } },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
+export async function respondInvite(userId: string, inviteId: string, action: "accept" | "reject") {
+  const invite = await prisma.studyGroupInvite.findUnique({ where: { id: inviteId } });
+  if (!invite || invite.inviteeId !== userId) throw new StudyGroupError("Không tìm thấy lời mời", 404);
+  if (invite.status !== "pending_invitee") throw new StudyGroupError("Lời mời không hợp lệ", 409);
+
+  if (action === "reject") {
+    await prisma.studyGroupInvite.update({ where: { id: inviteId }, data: { status: "rejected" } });
+    return { status: "rejected" };
+  }
+
+  const group = await prisma.studyGroup.findUnique({ where: { id: invite.groupId }, include: { members: true } });
+  if (!group) throw new StudyGroupError("Nhóm không còn tồn tại", 404);
+  if (group.members.length >= group.maxMembers) throw new StudyGroupError("Nhóm đã đầy", 409);
+
+  const alreadyMember = group.members.some((m) => m.userId === userId);
+  if (alreadyMember) throw new StudyGroupError("Bạn đã trong nhóm này", 409);
+
+  await prisma.$transaction([
+    prisma.studyGroupMember.create({ data: { groupId: invite.groupId, userId, role: "member" } }),
+    prisma.studyGroupInvite.update({ where: { id: inviteId }, data: { status: "accepted" } }),
+  ]);
+  return { status: "accepted" };
+}
+
 export async function getMessages(userId: string, groupId: string) {
   const membership = await prisma.studyGroupMember.findUnique({ where: { groupId_userId: { groupId, userId } } });
   if (!membership) throw new StudyGroupError("Bạn không trong nhóm này", 403);

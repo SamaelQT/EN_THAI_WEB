@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { format } from "date-fns";
 import { vi } from "date-fns/locale";
-import { Flame, BookOpen, Target, Users, Trophy } from "lucide-react";
+import { Flame, BookOpen, Target, Users, Trophy, CalendarDays } from "lucide-react";
+import { differenceInDays } from "date-fns";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -236,6 +237,18 @@ function RoadmapWidget({
             {streak?.currentStreak ?? 0}
           </div>
         </div>
+
+        {roadmap.targetDate && (() => {
+          const daysLeft = differenceInDays(new Date(roadmap.targetDate), new Date());
+          return (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <CalendarDays size={12} />
+              {daysLeft > 0
+                ? `Mục tiêu: ${format(new Date(roadmap.targetDate), "dd/MM/yyyy")} (còn ${daysLeft} ngày)`
+                : `Đã hết hạn mục tiêu: ${format(new Date(roadmap.targetDate), "dd/MM/yyyy")}`}
+            </div>
+          );
+        })()}
 
         <div>
           <div className="flex justify-between text-xs text-muted-foreground mb-1">

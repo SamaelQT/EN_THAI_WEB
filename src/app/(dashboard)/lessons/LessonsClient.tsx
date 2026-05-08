@@ -1,13 +1,14 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Loader2, PlayCircle, BookOpen, Sparkles } from "lucide-react";
+import { Loader2, PlayCircle, BookOpen, Volume2, Mic, Square } from "lucide-react";
 import CalendarView, { type LessonDay } from "./CalendarView";
+import { ENGLISH_WEEK_THEMES, THAI_WEEK_THEMES, type Level } from "@/lib/roadmap-generator";
 
 // Built-in lesson content for the MVP (expandable via AI later)
 const LESSON_CONTENT: Record<string, any> = {
@@ -71,6 +72,34 @@ const LESSON_CONTENT: Record<string, any> = {
   },
 };
 
+// ── Helper components ─────────────────────────────────────────
+
+function AudioWaveform() {
+  return (
+    <div className="flex items-end gap-1 h-8">
+      {[0, 0.15, 0.05, 0.25].map((delay, i) => (
+        <div
+          key={i}
+          className="w-2 bg-primary rounded-full"
+          style={{
+            height: "100%",
+            transformOrigin: "bottom",
+            animation: `waveBar 0.7s ease-in-out ${delay}s infinite alternate`,
+          }}
+        />
+      ))}
+      <style>{`@keyframes waveBar { from { transform: scaleY(0.15); } to { transform: scaleY(1); } }`}</style>
+    </div>
+  );
+}
+
+function ScoreBadge({ score }: { score: number }) {
+  if (score >= 0.8) return <Badge className="bg-green-500 text-white">Xuất sắc ✨</Badge>;
+  if (score >= 0.6) return <Badge className="bg-yellow-500 text-white">Tốt 👍</Badge>;
+  return <Badge variant="destructive">Thử lại 🔄</Badge>;
+}
+
+// ── Types ─────────────────────────────────────────────────────
 
 type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number };
 
@@ -83,7 +112,20 @@ type Props = {
   hasPlacementTest: boolean;
 };
 
-type LessonViewState = "list" | "generating" | "learning" | "quiz" | "done";
+type LessonViewState = "list" | "browse" | "generating" | "learning" | "quiz" | "done" | "conversation" | "conversation-done";
+
+type ConvMessage = { role: "user" | "assistant"; content: string };
+
+const SCENARIOS: { id: string; label: string; icon: string; desc: string }[] = [
+  { id: "restaurant", label: "Nhà hàng", icon: "🍜", desc: "Gọi món, hỏi menu" },
+  { id: "interview", label: "Phỏng vấn", icon: "💼", desc: "Xin việc, giới thiệu bản thân" },
+  { id: "airport", label: "Sân bay", icon: "✈️", desc: "Check-in, hỏi đường" },
+  { id: "shopping", label: "Mua sắm", icon: "🛍️", desc: "Hỏi giá, chọn hàng" },
+  { id: "friend", label: "Gặp bạn mới", icon: "👋", desc: "Làm quen, chuyện trò" },
+  { id: "hotel", label: "Khách sạn", icon: "🏨", desc: "Đặt phòng, check-in" },
+  { id: "doctor", label: "Bác sĩ", icon: "🏥", desc: "Mô tả triệu chứng" },
+  { id: "directions", label: "Hỏi đường", icon: "🗺️", desc: "Tìm đường, địa điểm" },
+];
 
 export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaultLang, userId, hasPlacementTest }: Props) {
   const router = useRouter();
@@ -92,16 +134,198 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
   const [activeLesson, setActiveLesson] = useState<any>(null);
   const [activeLessonKey, setActiveLessonKey] = useState("");
   const [activeDayId, setActiveDayId] = useState<string | null>(null);
+
+  // Free practice browse state
+  const [browseType, setBrowseType] = useState<{ type: string; label: string; icon: string; desc: string } | null>(null);
+  const [browseLevel, setBrowseLevel] = useState<string>("");
+  const [browseTab, setBrowseTab] = useState<"cefr" | "toeic" | "ielts">("cefr");
+  const [browseTopic, setBrowseTopic] = useState<string | null>(null);
+
+  // Conversation state
+  const [convScenario, setConvScenario] = useState<string>("");
+  const [convMessages, setConvMessages] = useState<ConvMessage[]>([]);
+  const [convLoading, setConvLoading] = useState(false);
+  const [convListening, setConvListening] = useState(false);
+  const [convLevel, setConvLevel] = useState<string>("");
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>("");
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const load = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) setAvailableVoices(voices);
+    };
+    load();
+    window.speechSynthesis.onvoiceschanged = load;
+  }, []);
+
+  useEffect(() => {
+    if (lessonState !== "conversation" || convMessages.length > 0) return;
+    // AI nói trước khi user bắt đầu
+    setConvLoading(true);
+    fetch("/api/conversation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "__START__" }],
+        language: lang,
+        scenario: convScenario,
+        level: convLevel,
+      }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.reply) {
+          setConvMessages([{ role: "assistant", content: data.reply }]);
+          if (typeof window !== "undefined" && window.speechSynthesis) {
+            const ttsLangVal = lang === "thai" ? "th-TH" : "en-US";
+            const cut = data.reply.search(/💡|Góp ý|Nhận xét|Lưu ý:/);
+            const speakPart = (cut > 0 ? data.reply.slice(0, cut) : data.reply).trim();
+            const utt = new SpeechSynthesisUtterance(speakPart);
+            const voices = window.speechSynthesis.getVoices();
+            const picked = voices.find((v) => v.voiceURI === selectedVoiceURI) ?? voices.find((v) => v.lang.startsWith(ttsLangVal.slice(0, 2)));
+            if (picked) utt.voice = picked;
+            utt.lang = ttsLangVal;
+            utt.rate = 0.9;
+            window.speechSynthesis.speak(utt);
+          }
+        }
+      })
+      .catch(() => toast.error("Không thể kết nối AI."))
+      .finally(() => setConvLoading(false));
+  }, [lessonState, convScenario]);
   const [lessonStartTime, setLessonStartTime] = useState<number>(0);
   const [quizIndex, setQuizIndex] = useState(0);
   const [quizAnswers, setQuizAnswers] = useState<number[]>([]);
   const [quizSelected, setQuizSelected] = useState<number | null>(null);
   const [quizScore, setQuizScore] = useState(0);
 
-  async function openLesson(type: string, language: string, level: string, dayId?: string) {
-    const key = `${type}_${language}_${level}`;
+  // B1 – TTS per vocabulary word
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+  // B2 – Listening
+  const [audioRevealed, setAudioRevealed] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  // B3 – Speaking mic
+  const [micPhraseIdx, setMicPhraseIdx] = useState<number | null>(null);
+  const [micResults, setMicResults] = useState<Record<number, { transcript: string; score: number }>>({});
+
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const recognitionRef = useRef<any>(null);
+
+  // ── Speech helpers ────────────────────────────────────────────
+
+  function getTTSLang() {
+    return activeLessonKey.includes("_thai_") ? "th-TH" : "en-US";
+  }
+
+  function speakWord(word: string, idx: number) {
+    if (typeof window === "undefined" || !window.speechSynthesis) {
+      toast.error("Trình duyệt không hỗ trợ phát âm");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(word);
+    utt.lang = getTTSLang();
+    utt.onstart = () => setSpeakingIdx(idx);
+    utt.onend = () => setSpeakingIdx(null);
+    utt.onerror = () => setSpeakingIdx(null);
+    utteranceRef.current = utt;
+    window.speechSynthesis.speak(utt);
+  }
+
+  function playTranscript() {
+    if (typeof window === "undefined" || !window.speechSynthesis) {
+      toast.error("Trình duyệt không hỗ trợ phát âm");
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(activeLesson.transcript);
+    utt.lang = getTTSLang();
+    utt.onend = () => { setIsPlayingAudio(false); setAudioRevealed(true); };
+    utt.onerror = () => { setIsPlayingAudio(false); setAudioRevealed(true); };
+    utteranceRef.current = utt;
+    setIsPlayingAudio(true);
+    window.speechSynthesis.speak(utt);
+  }
+
+  function stopTranscript() {
+    window.speechSynthesis.cancel();
+    setIsPlayingAudio(false);
+    setAudioRevealed(true);
+  }
+
+  function startMic(phraseIdx: number, phraseText: string) {
+    const SR =
+      typeof window !== "undefined" &&
+      ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+    if (!SR) {
+      toast.error("Trình duyệt không hỗ trợ nhận giọng nói. Dùng Chrome hoặc Edge.");
+      return;
+    }
+    if (recognitionRef.current) recognitionRef.current.abort();
+    const rec = new SR();
+    rec.lang = getTTSLang();
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    recognitionRef.current = rec;
+    setMicPhraseIdx(phraseIdx);
+
+    let gotResult = false;
+
+    rec.onresult = (e: any) => {
+      gotResult = true;
+      const spoken = e.results[0][0].transcript as string;
+      const score = matchScore(spoken, phraseText);
+      setMicResults((prev) => ({ ...prev, [phraseIdx]: { transcript: spoken, score } }));
+      setMicPhraseIdx(null);
+    };
+    rec.onerror = (e: any) => {
+      setMicPhraseIdx(null);
+      if (e.error === "not-allowed") toast.error("Cần cấp quyền microphone cho trang web");
+      else if (e.error === "no-speech") toast.info("Không nghe thấy giọng nói, nói to hơn và thử lại");
+      else if (e.error === "network") toast.error("Lỗi mạng, kiểm tra kết nối");
+      else toast.error(`Lỗi nhận giọng nói: ${e.error}`);
+    };
+    rec.onend = () => {
+      setMicPhraseIdx(null);
+      if (!gotResult) toast.info("Không nhận được giọng nói — thử nói to và rõ hơn");
+    };
+    rec.start();
+  }
+
+  function stopMic() {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+    setMicPhraseIdx(null);
+  }
+
+  function matchScore(spoken: string, target: string): number {
+    const spokenWords = spoken.toLowerCase().trim().split(/\s+/);
+    const targetWords = target.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (targetWords.length === 0) return 0;
+    return targetWords.filter((w) => spokenWords.includes(w)).length / targetWords.length;
+  }
+
+  function stopAll() {
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    recognitionRef.current?.abort();
+    recognitionRef.current = null;
+  }
+
+  // ── Lesson flow ───────────────────────────────────────────────
+
+  async function openLesson(type: string, language: string, level: string, dayId?: string, topic?: string) {
+    const key = topic ? `${type}_${language}_${level}_${topic}` : `${type}_${language}_${level}`;
     const cached = LESSON_CONTENT[key];
     setActiveDayId(dayId ?? null);
+    // reset speech state
+    setAudioRevealed(false);
+    setIsPlayingAudio(false);
+    setSpeakingIdx(null);
+    setMicPhraseIdx(null);
+    setMicResults({});
+    stopAll();
 
     if (cached) {
       setActiveLesson(cached);
@@ -122,11 +346,16 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
       const res = await fetch("/api/lessons/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonType: type, language, level }),
+        body: JSON.stringify({ lessonType: type, language, level, topic }),
       });
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      LESSON_CONTENT[key] = data; // cache in memory for this session
+      if (data.error) {
+        if (res.status === 429) toast.error("AI đang quá tải, thử lại sau vài giây.");
+        else toast.error(data.error);
+        setLessonState("browse");
+        return;
+      }
+      LESSON_CONTENT[key] = data;
       setActiveLesson(data);
       setLessonState("learning");
       setLessonStartTime(Date.now());
@@ -134,9 +363,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
       setQuizAnswers([]);
       setQuizSelected(null);
       setQuizScore(0);
-    } catch (e) {
+    } catch {
       toast.error("Không thể tạo bài học. Thử lại sau.");
-      setLessonState("list");
+      setLessonState("browse");
     }
   }
 
@@ -144,6 +373,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     setLessonState("quiz");
     setQuizIndex(0);
     setQuizSelected(null);
+    stopAll();
   }
 
   function answerQuiz(idx: number) {
@@ -197,7 +427,439 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     }
   }
 
-  // ── Generating screen ────────────────────────────────────────
+  // ── Browse screen (free practice) ────────────────────────────
+  if (lessonState === "browse" && browseType) {
+    type BrowseTab = "cefr" | "toeic" | "ielts";
+    const CEFR_LEVELS: { lvl: string; desc: string }[] = [
+      { lvl: "A1", desc: "Sơ cấp — vừa mới bắt đầu" },
+      { lvl: "A2", desc: "Sơ cấp nâng cao" },
+      { lvl: "B1", desc: "Trung cấp — giao tiếp hàng ngày" },
+      { lvl: "B2", desc: "Trung cấp nâng cao" },
+      { lvl: "C1", desc: "Cao cấp — gần như thành thạo" },
+      { lvl: "C2", desc: "Thành thạo — tương đương bản ngữ" },
+    ];
+    const TOEIC_BANDS: { label: string; range: string; cefr: string }[] = [
+      { label: "10–254", range: "10–254", cefr: "A1" },
+      { label: "255–549", range: "255–549", cefr: "A2" },
+      { label: "550–784", range: "550–784", cefr: "B1" },
+      { label: "785–989", range: "785–989", cefr: "B2" },
+      { label: "990", range: "990", cefr: "C1" },
+    ];
+    const IELTS_BANDS: { label: string; range: string; cefr: string }[] = [
+      { label: "Band 1–2", range: "1.0–2.9", cefr: "A1" },
+      { label: "Band 3", range: "3.0–3.9", cefr: "A2" },
+      { label: "Band 4–5", range: "4.0–5.4", cefr: "B1" },
+      { label: "Band 5.5–6.5", range: "5.5–6.5", cefr: "B2" },
+      { label: "Band 7–7.5", range: "7.0–7.5", cefr: "C1" },
+      { label: "Band 8+", range: "8.0–9.0", cefr: "C2" },
+    ];
+
+    const tabs: { id: BrowseTab; label: string }[] = [
+      { id: "cefr", label: "CEFR" },
+      { id: "toeic", label: "TOEIC" },
+      { id: "ielts", label: "IELTS" },
+    ];
+    // browseLevel reused as cefr level regardless of tab
+    const selectedCefr = browseLevel;
+
+    return (
+      <div className="max-w-lg mx-auto space-y-6">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={() => setLessonState("list")}>← Quay lại</Button>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">{browseType.icon}</span>
+            <div>
+              <h2 className="font-bold text-lg leading-tight">{browseType.label}</h2>
+              <p className="text-xs text-muted-foreground">{browseType.desc}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab bar — only show TOEIC/IELTS for English */}
+        {lang === "english" && (
+          <div className="flex gap-1 p-1 bg-muted rounded-lg">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => { setBrowseTab(t.id); setBrowseLevel(""); setBrowseTopic(null); }}
+                className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  browseTab === t.id ? "bg-background shadow-sm" : "hover:bg-background/50"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-muted-foreground">
+            {browseTab === "cefr" || lang === "thai" ? "Chọn trình độ CEFR"
+              : browseTab === "toeic" ? "Chọn nhóm điểm TOEIC"
+              : "Chọn band IELTS"}
+          </p>
+
+          {/* CEFR grid */}
+          {(browseTab === "cefr" || lang === "thai") && (
+            <div className="grid grid-cols-3 gap-2">
+              {CEFR_LEVELS.map(({ lvl, desc }) => (
+                <button
+                  key={lvl}
+                  onClick={() => { setBrowseLevel(lvl); setBrowseTopic(null); }}
+                  className={`rounded-xl border-2 py-3 text-sm font-semibold transition-colors ${
+                    selectedCefr === lvl
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:border-primary/50 hover:bg-muted"
+                  }`}
+                >
+                  {lvl}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* TOEIC list */}
+          {browseTab === "toeic" && lang === "english" && (
+            <div className="grid gap-2">
+              {TOEIC_BANDS.map(({ label, range, cefr }) => (
+                <button
+                  key={cefr}
+                  onClick={() => { setBrowseLevel(cefr); setBrowseTopic(null); }}
+                  className={`flex items-center justify-between rounded-xl border-2 px-4 py-3 text-sm transition-colors ${
+                    selectedCefr === cefr
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:border-primary/50 hover:bg-muted"
+                  }`}
+                >
+                  <span className="font-semibold">{label}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${selectedCefr === cefr ? "bg-white/20" : "bg-muted"}`}>
+                    = {cefr}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* IELTS list */}
+          {browseTab === "ielts" && lang === "english" && (
+            <div className="grid gap-2">
+              {IELTS_BANDS.map(({ label, range, cefr }) => (
+                <button
+                  key={cefr}
+                  onClick={() => { setBrowseLevel(cefr); setBrowseTopic(null); }}
+                  className={`flex items-center justify-between rounded-xl border-2 px-4 py-3 text-sm transition-colors ${
+                    selectedCefr === cefr
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:border-primary/50 hover:bg-muted"
+                  }`}
+                >
+                  <span className="font-semibold">{label}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${selectedCefr === cefr ? "bg-white/20" : "bg-muted"}`}>
+                    = {cefr}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {selectedCefr && (
+            <p className="text-xs text-center text-muted-foreground">
+              Bài học ở trình độ CEFR <strong>{selectedCefr}</strong>
+            </p>
+          )}
+        </div>
+
+        {/* Conversation: chọn tình huống */}
+        {selectedCefr && browseType.type === "conversation" && (
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-muted-foreground">Chọn tình huống</p>
+            <div className="grid grid-cols-2 gap-2">
+              {SCENARIOS.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => setBrowseTopic(s.id)}
+                  className={`rounded-xl border-2 px-3 py-3 text-left transition-colors ${
+                    browseTopic === s.id
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border hover:border-primary/50 hover:bg-muted"
+                  }`}
+                >
+                  <div className="text-xl mb-1">{s.icon}</div>
+                  <p className="text-sm font-semibold leading-tight">{s.label}</p>
+                  <p className={`text-xs mt-0.5 ${browseTopic === s.id ? "text-primary-foreground/70" : "text-muted-foreground"}`}>{s.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Topic list — cho các bài học thông thường */}
+        {selectedCefr && browseType.type !== "conversation" && (() => {
+          const themes = lang === "english"
+            ? ENGLISH_WEEK_THEMES[selectedCefr as Level] ?? []
+            : THAI_WEEK_THEMES[selectedCefr as Level] ?? [];
+          return (
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-muted-foreground">Chọn chủ đề</p>
+              <div className="grid gap-2">
+                {themes.map((topic) => (
+                  <button
+                    key={topic}
+                    onClick={() => setBrowseTopic(topic)}
+                    className={`w-full text-left rounded-xl border-2 px-4 py-3 text-sm transition-colors ${
+                      browseTopic === topic
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border hover:border-primary/50 hover:bg-muted"
+                    }`}
+                  >
+                    {topic}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        <Button
+          className="w-full"
+          size="lg"
+          disabled={!selectedCefr || !browseTopic}
+          onClick={() => {
+            if (browseType.type === "conversation") {
+              setConvScenario(browseTopic!);
+              setConvLevel(selectedCefr);
+              setConvMessages([]);
+              setLessonState("conversation");
+            } else {
+              openLesson(browseType.type, lang, selectedCefr, undefined, browseTopic ?? undefined);
+            }
+          }}
+        >
+          {browseType.type === "conversation" ? "Bắt đầu hội thoại →" : "Bắt đầu học →"}
+        </Button>
+      </div>
+    );
+  }
+
+  // ── Conversation screen ───────────────────────────────────────
+  if (lessonState === "conversation") {
+    const scenario = SCENARIOS.find((s) => s.id === convScenario);
+    const ttsLang = lang === "thai" ? "th-TH" : "en-US";
+
+    function extractSpeakPart(reply: string): string {
+      const cut = reply.search(/💡|Góp ý|Nhận xét|Lưu ý:/);
+      return (cut > 0 ? reply.slice(0, cut) : reply).trim();
+    }
+
+    function speakText(text: string) {
+      if (typeof window === "undefined" || !window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const utt = new SpeechSynthesisUtterance(extractSpeakPart(text));
+      const picked = availableVoices.find((v) => v.voiceURI === selectedVoiceURI)
+        ?? availableVoices.find((v) => v.lang.startsWith(ttsLang.slice(0, 2)));
+      if (picked) utt.voice = picked;
+      utt.lang = ttsLang;
+      utt.rate = 0.9;
+      window.speechSynthesis.speak(utt);
+    }
+
+    async function sendMessage(userText: string) {
+      const newMessages: ConvMessage[] = [...convMessages, { role: "user", content: userText }];
+      setConvMessages(newMessages);
+      setConvLoading(true);
+      try {
+        const res = await fetch("/api/conversation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: newMessages, language: lang, scenario: convScenario, level: convLevel }),
+        });
+        const data = await res.json();
+        if (data.reply) {
+          const aiMsg: ConvMessage = { role: "assistant", content: data.reply };
+          setConvMessages([...newMessages, aiMsg]);
+          speakText(data.reply);
+        }
+      } catch {
+        toast.error("Không thể kết nối AI. Thử lại sau.");
+      } finally {
+        setConvLoading(false);
+      }
+    }
+
+    function startListening() {
+      const SR = typeof window !== "undefined" && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+      if (!SR) { toast.error("Trình duyệt không hỗ trợ. Dùng Chrome hoặc Edge."); return; }
+      window.speechSynthesis.cancel();
+      const rec = new SR();
+      rec.lang = ttsLang;
+      rec.interimResults = false;
+      setConvListening(true);
+      let got = false;
+      rec.onresult = (e: any) => {
+        got = true;
+        sendMessage(e.results[0][0].transcript as string);
+      };
+      rec.onerror = (e: any) => {
+        setConvListening(false);
+        if (e.error === "not-allowed") toast.error("Cần cấp quyền microphone");
+        else toast.error("Lỗi nhận giọng nói");
+      };
+      rec.onend = () => {
+        setConvListening(false);
+        if (!got) toast.info("Không nghe thấy giọng nói, thử lại");
+      };
+      rec.start();
+    }
+
+    function endConversation() {
+      window.speechSynthesis.cancel();
+      setLessonState("conversation-done");
+    }
+
+    return (
+      <div className="max-w-2xl mx-auto flex flex-col h-[calc(100vh-8rem)]">
+        {/* Header */}
+        <div className="flex items-center justify-between pb-3 border-b shrink-0 gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => { window.speechSynthesis.cancel(); setLessonState("browse"); }}>← Quay lại</Button>
+            <span className="text-lg">{scenario?.icon}</span>
+            <div>
+              <p className="font-semibold text-sm">{scenario?.label}</p>
+              <p className="text-xs text-muted-foreground">{lang === "english" ? "Tiếng Anh" : "Tiếng Thái"} · {convLevel}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {availableVoices.filter((v) => v.lang.startsWith(ttsLang.slice(0, 2))).length > 0 && (
+              <select
+                value={selectedVoiceURI}
+                onChange={(e) => setSelectedVoiceURI(e.target.value)}
+                className="text-xs rounded-md border bg-background px-2 py-1 max-w-[160px] truncate"
+                title="Chọn giọng đọc"
+              >
+                <option value="">🔊 Giọng mặc định</option>
+                {availableVoices
+                  .filter((v) => v.lang.startsWith(ttsLang.slice(0, 2)))
+                  .map((v) => (
+                    <option key={v.voiceURI} value={v.voiceURI}>
+                      {v.name}
+                    </option>
+                  ))}
+              </select>
+            )}
+            <Button variant="destructive" size="sm" onClick={endConversation}>Kết thúc</Button>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto py-4 space-y-4">
+          {convMessages.length === 0 && (
+            <div className="text-center text-muted-foreground py-12">
+              <p className="text-4xl mb-3">{scenario?.icon}</p>
+              <p className="font-medium">{scenario?.label}</p>
+              <p className="text-sm mt-1">{scenario?.desc}</p>
+              <p className="text-xs mt-4 text-muted-foreground">Bấm mic để bắt đầu hội thoại</p>
+            </div>
+          )}
+          {convMessages.map((msg, i) => {
+            const isUser = msg.role === "user";
+            const cut = msg.content.search(/💡|Góp ý|Nhận xét|Lưu ý:/);
+            const mainText = (cut > 0 ? msg.content.slice(0, cut) : msg.content).trim();
+            const hintText = cut > 0 ? msg.content.slice(cut).replace(/^(💡|Góp ý[^:]*:|Nhận xét[^:]*:|Lưu ý:)\s*/u, "").trim() : null;
+            return (
+              <div key={i} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[80%] space-y-1.5`}>
+                  <div className={`rounded-2xl px-4 py-2.5 text-sm ${isUser ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-muted rounded-bl-sm"}`}>
+                    {mainText}
+                  </div>
+                  {!isUser && hintText && (
+                    <div className="text-xs bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100 rounded-lg px-3 py-2">
+                      💡 {hintText}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {convLoading && (
+            <div className="flex justify-start">
+              <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-3">
+                <Loader2 size={16} className="animate-spin text-muted-foreground" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Mic button */}
+        <div className="pt-3 border-t shrink-0 flex justify-center">
+          <button
+            onClick={startListening}
+            disabled={convLoading || convListening}
+            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg ${
+              convListening
+                ? "bg-red-500 text-white scale-110 animate-pulse"
+                : convLoading
+                ? "bg-muted text-muted-foreground cursor-not-allowed"
+                : "bg-primary text-primary-foreground hover:scale-105"
+            }`}
+          >
+            {convListening ? <Square size={24} /> : <Mic size={24} />}
+          </button>
+          <p className="absolute mt-20 text-xs text-muted-foreground">
+            {convListening ? "Đang nghe..." : convLoading ? "AI đang trả lời..." : "Bấm để nói"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Conversation done screen ──────────────────────────────────
+  if (lessonState === "conversation-done") {
+    const scenario = SCENARIOS.find((s) => s.id === convScenario);
+    const userTurns = convMessages.filter((m) => m.role === "user").length;
+    const feedbacks = convMessages
+      .filter((m) => m.role === "assistant")
+      .map((m) => {
+        const cut = m.content.search(/💡|Góp ý|Nhận xét|Lưu ý:/);
+        return cut > 0 ? m.content.slice(cut).replace(/^(💡|Góp ý[^:]*:|Nhận xét[^:]*:|Lưu ý:)\s*/u, "").trim() : null;
+      })
+      .filter(Boolean) as string[];
+
+    return (
+      <div className="max-w-lg mx-auto space-y-6">
+        <div className="text-center space-y-2">
+          <div className="text-5xl">{scenario?.icon}</div>
+          <h2 className="text-2xl font-bold">Kết thúc hội thoại!</h2>
+          <p className="text-muted-foreground">{scenario?.label} · {userTurns} lượt nói</p>
+        </div>
+
+        {feedbacks.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">💡 Nhận xét từ AI</CardTitle></CardHeader>
+            <CardContent className="space-y-2">
+              {feedbacks.map((fb, i) => (
+                <div key={i} className="text-sm p-2 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100 rounded-lg">{fb}</div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {feedbacks.length === 0 && (
+          <Card>
+            <CardContent className="pt-6 text-center text-muted-foreground">
+              <p>Không có lỗi nào được ghi nhận. Xuất sắc!</p>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={() => setLessonState("list")}>Quay lại</Button>
+          <Button className="flex-1" onClick={() => { setConvMessages([]); setLessonState("conversation"); }}>Luyện lại</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Generating screen ─────────────────────────────────────────
   if (lessonState === "generating") {
     return (
       <div className="max-w-md mx-auto text-center space-y-6 py-20">
@@ -210,7 +872,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     );
   }
 
-  // ── Quiz screen ──────────────────────────────────────────────
+  // ── Quiz screen ───────────────────────────────────────────────
   if (lessonState === "quiz" && activeLesson) {
     const q = activeLesson.quiz[quizIndex];
     return (
@@ -255,7 +917,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     );
   }
 
-  // ── Done screen ──────────────────────────────────────────────
+  // ── Done screen ───────────────────────────────────────────────
   if (lessonState === "done") {
     const score = quizScore;
     return (
@@ -273,35 +935,56 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
             </p>
           </CardContent>
         </Card>
-        <div className="flex gap-3 justify-center">
+        <div className="flex gap-3 justify-center flex-wrap">
           <Button variant="outline" onClick={() => setLessonState("list")}>Quay lại</Button>
-          <Button onClick={() => { setLessonState("learning"); setQuizIndex(0); setQuizSelected(null); setQuizScore(0); setQuizAnswers([]); }}>
+          <Button variant="outline" onClick={() => { setLessonState("learning"); setQuizIndex(0); setQuizSelected(null); setQuizScore(0); setQuizAnswers([]); }}>
             Học lại
           </Button>
+          {browseType && (
+            <Button onClick={() => { setBrowseLevel(""); setBrowseTab("cefr"); setBrowseTopic(null); setLessonState("browse"); }}>
+              Chọn bài khác →
+            </Button>
+          )}
         </div>
       </div>
     );
   }
 
-  // ── Learning screen (vocabulary/grammar) ──────────────────────
+  // ── Learning screen ───────────────────────────────────────────
   if (lessonState === "learning" && activeLesson) {
+    const isListeningLesson = activeLessonKey.startsWith("listening_");
+    const quizLocked = isListeningLesson && !audioRevealed;
+
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <Button variant="ghost" size="sm" onClick={() => setLessonState("list")}>← Quay lại</Button>
+          <Button variant="ghost" size="sm" onClick={() => { stopAll(); setLessonState("list"); }}>← Quay lại</Button>
           <Badge variant="outline">{activeLessonKey}</Badge>
         </div>
         <h2 className="text-xl font-bold">{activeLesson.title}</h2>
 
-        {/* Vocabulary lesson */}
+        {/* B1 – Vocabulary with TTS buttons */}
         {activeLesson.words && (
           <div className="grid gap-4">
             {activeLesson.words.map((w: any, i: number) => (
               <Card key={i}>
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-lg font-bold">{w.word}</p>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-lg font-bold">{w.word}</p>
+                        <button
+                          onClick={() => speakWord(w.word, i)}
+                          disabled={speakingIdx === i}
+                          className="text-muted-foreground hover:text-primary disabled:opacity-40 transition-colors"
+                          aria-label={`Phát âm ${w.word}`}
+                        >
+                          {speakingIdx === i
+                            ? <Loader2 size={16} className="animate-spin" />
+                            : <Volume2 size={16} />
+                          }
+                        </button>
+                      </div>
                       <p className="text-sm text-muted-foreground">{w.phonetic}</p>
                       <p className="text-primary font-medium mt-1">{w.meaning}</p>
                     </div>
@@ -338,14 +1021,59 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
           </Card>
         )}
 
-        {/* Listening simulation */}
+        {/* B2 – Listening lesson */}
         {activeLesson.transcript && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">🎧 {activeLesson.context}</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-sm leading-relaxed whitespace-pre-line bg-muted/50 p-3 rounded-lg">{activeLesson.transcript}</p>
+            <CardContent className="space-y-3">
+              {/* Playing state: waveform + stop */}
+              {isPlayingAudio && (
+                <div className="flex items-center gap-4 bg-primary/5 rounded-lg p-4">
+                  <AudioWaveform />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Đang phát...</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={stopTranscript} className="gap-1.5 shrink-0">
+                    <Square size={14} />
+                    Dừng
+                  </Button>
+                </div>
+              )}
+
+              {/* Not yet played: show play button */}
+              {!isPlayingAudio && !audioRevealed && (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <Button onClick={playTranscript} size="lg" className="gap-2">
+                    <PlayCircle size={20} />
+                    Nghe đoạn hội thoại
+                  </Button>
+                  <button
+                    onClick={() => setAudioRevealed(true)}
+                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  >
+                    Xem transcript
+                  </button>
+                </div>
+              )}
+
+              {/* During playback: show "Xem transcript" link */}
+              {isPlayingAudio && (
+                <button
+                  onClick={stopTranscript}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                >
+                  Xem transcript
+                </button>
+              )}
+
+              {/* Transcript revealed */}
+              {audioRevealed && (
+                <p className="text-sm leading-relaxed whitespace-pre-line bg-muted/50 p-3 rounded-lg">
+                  {activeLesson.transcript}
+                </p>
+              )}
             </CardContent>
           </Card>
         )}
@@ -378,20 +1106,56 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
           </div>
         )}
 
-        {/* Speaking lesson */}
+        {/* B3 – Speaking lesson with mic */}
         {activeLesson.phrases && (
           <div className="space-y-3">
             <div className="grid gap-3">
-              {activeLesson.phrases.map((p: any, i: number) => (
-                <Card key={i}>
-                  <CardContent className="pt-4 pb-4">
-                    <p className="font-bold text-lg">{p.phrase}</p>
-                    <p className="text-sm text-muted-foreground">{p.phonetic}</p>
-                    <p className="text-primary font-medium mt-1">{p.meaning}</p>
-                  </CardContent>
-                </Card>
-              ))}
+              {activeLesson.phrases.map((p: any, i: number) => {
+                const result = micResults[i];
+                const isRecording = micPhraseIdx === i;
+                return (
+                  <Card key={i}>
+                    <CardContent className="pt-4 pb-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <p className="font-bold text-lg">{p.phrase}</p>
+                          <p className="text-sm text-muted-foreground">{p.phonetic}</p>
+                          <p className="text-primary font-medium mt-1">{p.meaning}</p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant={isRecording ? "destructive" : "outline"}
+                          onClick={() => isRecording ? stopMic() : startMic(i, p.phrase)}
+                          className="gap-1.5 shrink-0"
+                        >
+                          {isRecording ? (
+                            <><Square size={14} />Dừng</>
+                          ) : (
+                            <><Mic size={14} />Luyện phát âm</>
+                          )}
+                        </Button>
+                      </div>
+                      {isRecording && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                          Đang nghe...
+                        </div>
+                      )}
+                      {result && (
+                        <div className="bg-muted/50 rounded-lg px-3 py-2 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <ScoreBadge score={result.score} />
+                            <span className="text-xs text-muted-foreground">{Math.round(result.score * 100)}% khớp</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">Nhận được: "{result.transcript}"</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
+
             {activeLesson.dialogue && (
               <Card>
                 <CardHeader className="pb-2"><CardTitle className="text-base">Hội thoại mẫu</CardTitle></CardHeader>
@@ -412,47 +1176,28 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
           </div>
         )}
 
-        <Button onClick={startQuiz} size="lg" className="w-full">
-          Làm bài kiểm tra nhanh ({activeLesson.quiz?.length ?? 0} câu) →
-        </Button>
+        {/* Quiz button – locked for listening until audio revealed */}
+        <div className="space-y-1">
+          <Button
+            onClick={startQuiz}
+            size="lg"
+            className="w-full"
+            disabled={quizLocked}
+          >
+            Làm bài kiểm tra nhanh ({activeLesson.quiz?.length ?? 0} câu) →
+          </Button>
+          {quizLocked && (
+            <p className="text-xs text-center text-muted-foreground">Nghe xong bài hội thoại trước nhé</p>
+          )}
+        </div>
       </div>
     );
   }
 
-  // ── List screen ──────────────────────────────────────────────
+  // ── List screen ───────────────────────────────────────────────
   const hasEn = !!enRoadmap;
   const hasTh = !!thRoadmap;
   const hasAnyRoadmap = hasEn || hasTh;
-
-  if (!hasAnyRoadmap) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Bài học</h1>
-        <Card>
-          <CardContent className="pt-10 pb-10 text-center text-muted-foreground">
-            <BookOpen className="mx-auto mb-3 opacity-30" size={48} />
-            <p>Bạn chưa có lộ trình học nào.</p>
-            {hasPlacementTest ? (
-              <>
-                <p className="text-sm mt-1">Bạn đã có kết quả kiểm tra. Hãy tạo lộ trình!</p>
-                <Button className="mt-4" onClick={() => router.push("/roadmap")}>
-                  Tạo lộ trình ngay →
-                </Button>
-              </>
-            ) : (
-              <>
-                <p className="text-sm mt-1">Hoàn thành bài kiểm tra đầu vào để bắt đầu.</p>
-                <Button className="mt-4" onClick={() => router.push("/placement")}>
-                  Làm bài kiểm tra đầu vào
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   const currentLevel = (lang === "english" ? enRoadmap : thRoadmap)?.currentLevel ?? "";
 
   const lessonTypes = [
@@ -462,6 +1207,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     { type: "reading", label: "Đọc hiểu", icon: "📖", desc: "Đọc và phân tích văn bản" },
     { type: "speaking", label: "Nói", icon: "🗣️", desc: "Luyện phát âm và nói" },
     { type: "writing", label: "Viết", icon: "✏️", desc: "Viết đoạn văn và essay" },
+    { type: "conversation", label: "Giao tiếp", icon: "💬", desc: "Hội thoại AI theo tình huống" },
   ];
 
   return (
@@ -491,44 +1237,58 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
         </div>
       </div>
 
-      {/* Google Calendar-style schedule */}
-      <CalendarView
-        lessonDays={lessonDays}
-        onStartLesson={(type, language, level, dayId) => openLesson(type, language, level, dayId)}
-      />
+      {/* Roadmap schedule — only when user has a roadmap */}
+      {hasAnyRoadmap ? (
+        <CalendarView
+          lessonDays={lessonDays}
+          onStartLesson={(type, language, level, dayId) => openLesson(type, language, level, dayId)}
+        />
+      ) : (
+        <Card>
+          <CardContent className="py-6 flex items-center gap-4">
+            <BookOpen className="opacity-30 shrink-0" size={36} />
+            <div className="flex-1">
+              <p className="font-medium text-sm">Chưa có lộ trình học</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {hasPlacementTest ? "Bạn đã có kết quả kiểm tra. Hãy tạo lộ trình!" : "Làm bài kiểm tra đầu vào để nhận lộ trình phù hợp."}
+              </p>
+            </div>
+            <Button size="sm" onClick={() => router.push(hasPlacementTest ? "/roadmap" : "/placement")}>
+              {hasPlacementTest ? "Tạo lộ trình →" : "Kiểm tra đầu vào →"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Free practice section */}
+      {/* Free practice — always visible */}
       <div>
-        <h2 className="text-base font-semibold mb-3 text-muted-foreground">Luyện tập tự do</h2>
+        <h2 className="text-base font-semibold mb-1 text-muted-foreground">Luyện tập tự do</h2>
+        <p className="text-xs text-muted-foreground mb-3">Chọn bài học bất kỳ, không giới hạn trình độ</p>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {lessonTypes.map(({ type, label, icon, desc }) => {
-            const key = `${type}_${lang}_${currentLevel}`;
-            const hasContent = !!LESSON_CONTENT[key];
-            return (
-              <Card
-                key={type}
-                className="cursor-pointer transition-shadow hover:shadow-md"
-                onClick={() => openLesson(type, lang, currentLevel)}
-              >
-                <CardContent className="pt-4 pb-4 flex items-center gap-3">
-                  <div className="text-2xl w-10 h-10 flex items-center justify-center bg-muted rounded-lg shrink-0">
-                    {icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm">{label}</p>
-                    <p className="text-xs text-muted-foreground truncate">{desc}</p>
-                  </div>
-                  {hasContent ? (
-                    <PlayCircle className="text-primary shrink-0" size={16} />
-                  ) : (
-                    <Badge variant="secondary" className="text-xs gap-1 shrink-0">
-                      <Sparkles size={10} />AI
-                    </Badge>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+          {lessonTypes.map((lt) => (
+            <Card
+              key={lt.type}
+              className="cursor-pointer transition-shadow hover:shadow-md"
+              onClick={() => {
+                setBrowseType(lt);
+                setBrowseLevel(currentLevel || "B1");
+                setBrowseTab("cefr");
+                setBrowseTopic(null);
+                setLessonState("browse");
+              }}
+            >
+              <CardContent className="pt-4 pb-4 flex items-center gap-3">
+                <div className="text-2xl w-10 h-10 flex items-center justify-center bg-muted rounded-lg shrink-0">
+                  {lt.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm">{lt.label}</p>
+                  <p className="text-xs text-muted-foreground truncate">{lt.desc}</p>
+                </div>
+                <PlayCircle className="text-muted-foreground shrink-0" size={16} />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     </div>

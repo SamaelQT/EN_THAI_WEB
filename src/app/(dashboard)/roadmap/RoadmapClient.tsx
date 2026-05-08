@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays, Target, AlertTriangle, Info } from "lucide-react";
+import { CalendarDays, Target, AlertTriangle, Info, Trash2 } from "lucide-react";
 
 type PlacementTest = {
   id: string;
@@ -26,7 +26,8 @@ type Day = { id: string; dayNumber: number; lessonType: string; status: string }
 type Week = { id: string; weekNumber: number; theme: string; skills: string; status: string; startDate: Date; days: Day[] };
 type Roadmap = {
   id: string; language: string; targetExam: string | null; targetScore: number | null;
-  currentLevel: string; targetLevel: string; startDate: Date; targetDate: Date;
+  currentLevel: string; targetLevel: string; learningFocus: string;
+  startDate: Date; targetDate: Date;
   weeklyHours: number; totalWeeks: number; status: string; weeks: Week[];
 };
 
@@ -51,6 +52,7 @@ const EXAM_TEST_TYPE: Record<string, string> = {
   TOEIC: "toeic",
   IELTS: "ielts",
   general: "cefr",
+  general_thai: "cefr",
   "CU-TFL": "cutfl",
 };
 
@@ -62,12 +64,57 @@ const EXAM_LABEL: Record<string, string> = {
   general_thai: "Tiếng Thái tổng quát (CEFR)",
 };
 
+const FOCUS_OPTIONS = [
+  {
+    value: "comprehensive",
+    label: "Toàn diện",
+    desc: "Đọc, viết, nghe, nói, ngữ pháp, từ vựng",
+    icon: "📚",
+  },
+  {
+    value: "conversational",
+    label: "Giao tiếp",
+    desc: "Nghe, nói, phát âm, từ vựng — không cần đọc viết",
+    icon: "💬",
+  },
+  {
+    value: "academic",
+    label: "Học thuật",
+    desc: "Ngữ pháp, đọc hiểu, từ vựng, viết",
+    icon: "🎓",
+  },
+];
+
+const FOCUS_LABEL: Record<string, string> = {
+  comprehensive: "Toàn diện",
+  conversational: "Giao tiếp",
+  academic: "Học thuật",
+};
+
 const TEST_TYPE_LABEL: Record<string, string> = {
   cefr: "CEFR",
   toeic: "TOEIC",
   ielts: "IELTS",
   cutfl: "CU-TFL",
 };
+
+// Ordered CEFR levels (index = rank)
+const CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"];
+// Ordered CU-TFL levels
+const CUTFL_LEVELS = ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5"];
+
+/** Return target levels available above the current level */
+function getTargetLevels(exam: string, currentLevel: string): string[] {
+  if (exam === "general" || exam === "general_thai") {
+    const idx = CEFR_LEVELS.indexOf(currentLevel);
+    return idx >= 0 ? CEFR_LEVELS.slice(idx + 1) : CEFR_LEVELS.slice(1);
+  }
+  if (exam === "CU-TFL") {
+    const idx = CUTFL_LEVELS.indexOf(currentLevel);
+    return idx >= 0 ? CUTFL_LEVELS.slice(idx + 1) : CUTFL_LEVELS.slice(1);
+  }
+  return [];
+}
 
 type Props = { roadmaps: Roadmap[]; tests: PlacementTest[] };
 
@@ -80,6 +127,8 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
     targetExam: "",
     placementTestId: "",
     targetScore: "",
+    targetLevel: "",        // for CEFR / CU-TFL
+    learningFocus: "comprehensive",
     targetDate: "",
     weeklyHours: "7",
     busyDays: [] as number[],
@@ -102,13 +151,21 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
   );
   const hasMatchingTest = matchingTests.length > 0;
 
+  // Level-based exams (CEFR / CU-TFL) — user picks a target level instead of a score
+  const isLevelBased = form.targetExam === "general" || form.targetExam === "general_thai" || form.targetExam === "CU-TFL";
+  const selectedTest = matchingTests.find((t) => t.id === form.placementTestId);
+  const currentLevel = selectedTest?.level ?? "";
+  const availableTargetLevels = isLevelBased && currentLevel
+    ? getTargetLevels(form.targetExam, currentLevel)
+    : [];
+
   function setField<K extends keyof typeof form>(k: K, v: string) {
     setForm((prev) => ({ ...prev, [k]: v }));
   }
 
   // When language changes, reset exam and test
   function onLanguageChange(v: string) {
-    setForm((prev) => ({ ...prev, language: v, targetExam: "", placementTestId: "", busyDays: [] }));
+    setForm((prev) => ({ ...prev, language: v, targetExam: "", placementTestId: "", targetLevel: "", busyDays: [] }));
     setFeasibilityError("");
   }
 
@@ -121,9 +178,9 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
     }));
   }
 
-  // When exam changes, reset placementTestId
+  // When exam changes, reset placementTestId + targetLevel
   function onExamChange(v: string) {
-    setForm((prev) => ({ ...prev, targetExam: v, placementTestId: "" }));
+    setForm((prev) => ({ ...prev, targetExam: v, placementTestId: "", targetLevel: "" }));
     setFeasibilityError("");
   }
 
@@ -143,6 +200,8 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
         placementTestId: form.placementTestId,
         targetExam: apiExam,
         targetScore: form.targetScore ? Number(form.targetScore) : null,
+        targetLevel: form.targetLevel || null,
+        learningFocus: form.learningFocus,
         targetDate: form.targetDate,
         weeklyHours: Number(form.weeklyHours),
         busyDays: form.busyDays,
@@ -167,7 +226,8 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
     !!form.placementTestId &&
     !!form.targetDate &&
     hasMatchingTest &&
-    form.busyDays.length < 7;
+    form.busyDays.length < 7 &&
+    (!isLevelBased || !!form.targetLevel);
 
   return (
     <div className="space-y-6">
@@ -229,7 +289,11 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
                   {/* Step 1 – Language */}
                   <div className="space-y-2">
                     <Label>Ngôn ngữ muốn học</Label>
-                    <Select value={form.language} onValueChange={(v) => onLanguageChange(v ?? "")}>
+                    <Select
+                      value={form.language}
+                      onValueChange={(v) => onLanguageChange(v ?? "")}
+                      items={{ english: "Tiếng Anh", thai: "Tiếng Thái" }}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Chọn ngôn ngữ" />
                       </SelectTrigger>
@@ -249,11 +313,41 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
                     </Select>
                   </div>
 
-                  {/* Step 2 – Target exam */}
+                  {/* Step 2 – Learning focus */}
+                  <div className="space-y-2">
+                    <Label>Hướng học</Label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      {FOCUS_OPTIONS.map((opt) => {
+                        const selected = form.learningFocus === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setField("learningFocus", opt.value)}
+                            className={`text-left p-3 rounded-lg border-2 transition-colors ${
+                              selected
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:border-muted-foreground/40"
+                            }`}
+                          >
+                            <div className="text-lg mb-1">{opt.icon}</div>
+                            <div className="font-medium text-sm">{opt.label}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5 leading-snug">{opt.desc}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Step 3 – Target exam */}
                   {form.language && (
                     <div className="space-y-2">
                       <Label>Mục tiêu học</Label>
-                      <Select value={form.targetExam} onValueChange={(v) => onExamChange(v ?? "")}>
+                      <Select
+                        value={form.targetExam}
+                        onValueChange={(v) => onExamChange(v ?? "")}
+                        items={Object.fromEntries(examsForLang.map((e) => [e, EXAM_LABEL[e]]))}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Chọn mục tiêu" />
                         </SelectTrigger>
@@ -288,7 +382,14 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
                       ) : (
                         <div className="space-y-2">
                           <Label>Kết quả kiểm tra đầu vào</Label>
-                          <Select value={form.placementTestId} onValueChange={(v) => setField("placementTestId", v ?? "")}>
+                          <Select
+                            value={form.placementTestId}
+                            onValueChange={(v) => setForm((prev) => ({ ...prev, placementTestId: v ?? "", targetLevel: "" }))}
+                            items={Object.fromEntries(matchingTests.map((t) => [
+                              t.id,
+                              `${new Date(t.completedAt).toLocaleDateString("vi-VN")} · ${TEST_TYPE_LABEL[t.testType]} · ${t.level} · ${t.score}/100`,
+                            ]))}
+                          >
                             <SelectTrigger>
                               <SelectValue placeholder="Chọn lần kiểm tra" />
                             </SelectTrigger>
@@ -300,6 +401,39 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
                               ))}
                             </SelectContent>
                           </Select>
+                        </div>
+                      )}
+
+                      {/* Target level – only for CEFR / CU-TFL */}
+                      {hasMatchingTest && isLevelBased && form.placementTestId && (
+                        <div className="space-y-2">
+                          <Label>Trình độ mục tiêu</Label>
+                          {currentLevel && (
+                            <p className="text-xs text-muted-foreground">
+                              Trình độ hiện tại của bạn: <strong>{currentLevel}</strong>
+                            </p>
+                          )}
+                          {availableTargetLevels.length === 0 ? (
+                            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                              Bạn đã đạt trình độ cao nhất, không cần tạo lộ trình tiếp theo.
+                            </div>
+                          ) : (
+                            <Select
+                              value={form.targetLevel}
+                              onValueChange={(v) => setField("targetLevel", v ?? "")}
+                              items={Object.fromEntries(availableTargetLevels.map((l) => [l, l]))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Chọn trình độ mục tiêu" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableTargetLevels.map((level) => (
+                                  <SelectItem key={level} value={level}>{level}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
                         </div>
                       )}
 
@@ -337,7 +471,11 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
 
                           <div className="space-y-2">
                             <Label>Số giờ học mỗi tuần</Label>
-                            <Select value={form.weeklyHours} onValueChange={(v) => setField("weeklyHours", v ?? "7")}>
+                            <Select
+                              value={form.weeklyHours}
+                              onValueChange={(v) => setField("weeklyHours", v ?? "7")}
+                              items={{ "3": "3 giờ/tuần – Nhẹ nhàng", "7": "7 giờ/tuần – Trung bình", "14": "14 giờ/tuần – Chăm chỉ", "21": "21 giờ/tuần – Cường độ cao" }}
+                            >
                               <SelectTrigger><SelectValue /></SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="3">3 giờ/tuần – Nhẹ nhàng (~30 phút/ngày)</SelectItem>
@@ -427,8 +565,24 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
 }
 
 function RoadmapCard({ roadmap }: { roadmap: Roadmap }) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const meta = LANG_META[roadmap.language as keyof typeof LANG_META];
+
+  async function handleDelete() {
+    if (!confirm(`Xóa lộ trình ${meta?.label ?? roadmap.language}? Toàn bộ tiến trình sẽ mất.`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/roadmap/${roadmap.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast.success("Đã xóa lộ trình.");
+      router.refresh();
+    } catch {
+      toast.error("Không thể xóa. Thử lại sau.");
+      setDeleting(false);
+    }
+  }
   const completed = roadmap.weeks.filter((w) => w.status === "completed").length;
   const progress = Math.round((completed / roadmap.totalWeeks) * 100);
   const daysLeft = differenceInDays(new Date(roadmap.targetDate), new Date());
@@ -438,7 +592,7 @@ function RoadmapCard({ roadmap }: { roadmap: Roadmap }) {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2 text-base flex-wrap">
             <span className={`text-xs font-bold text-white px-2 py-1 rounded ${meta?.color}`}>
               {meta?.flag}
             </span>
@@ -448,10 +602,26 @@ function RoadmapCard({ roadmap }: { roadmap: Roadmap }) {
                 {roadmap.targetExam}{roadmap.targetScore ? ` ${roadmap.targetScore}` : ""}
               </Badge>
             )}
+            <Badge variant="outline" className="font-normal">
+              {FOCUS_OPTIONS.find((f) => f.value === roadmap.learningFocus)?.icon}{" "}
+              {FOCUS_LABEL[roadmap.learningFocus] ?? roadmap.learningFocus}
+            </Badge>
           </CardTitle>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CalendarDays size={14} />
-            {daysLeft > 0 ? `Còn ${daysLeft} ngày` : "Đã hết hạn"}
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1 text-sm text-muted-foreground">
+              <CalendarDays size={14} />
+              {daysLeft > 0 ? `Còn ${daysLeft} ngày` : "Đã hết hạn"}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Xóa lộ trình"
+            >
+              <Trash2 size={14} />
+            </Button>
           </div>
         </div>
       </CardHeader>

@@ -23,7 +23,17 @@
       "Bash(node -e ' *)",
       "Bash(mkdir -p \"src/app/api/roadmap/[id]/busy-days\")",
       "Bash(mkdir -p \"src/app/api/roadmap/[id]/reschedule-day\")",
-      "PowerShell($s = Get-Content \"node_modules/.prisma/client/index.js\" -Raw; $idx = $s.IndexOf\\(\"PlacementTest {`\\\\n  id\"\\); if \\($idx -gt 0\\) { $s.Substring\\($idx, 400\\) } else { \"not found\" })"
+      "PowerShell($s = Get-Content \"node_modules/.prisma/client/index.js\" -Raw; $idx = $s.IndexOf\\(\"PlacementTest {`\\\\n  id\"\\); if \\($idx -gt 0\\) { $s.Substring\\($idx, 400\\) } else { \"not found\" })",
+      "Bash(mkdir -p \"D:/Web/EN_THAI_WEB/src/app/api/placement/[id]\")",
+      "Bash(New-Item -ItemType Directory -Path \"D:\\\\Web\\\\EN_THAI_WEB\\\\src\\\\app\\\\api\\\\study-groups\\\\[id]\\\\invite\" -Force)",
+      "Bash(cd /mnt/d/Web/EN_THAI_WEB && npx tsc --noEmit 2>&1 | head -30)",
+      "Bash(rm -f \"/mnt/d/Web/EN_THAI_WEB/src/app/\\(dashboard\\)/conversation/page.tsx\")",
+      "Bash(rmdir \"/mnt/d/Web/EN_THAI_WEB/src/app/\\(dashboard\\)/conversation\")",
+      "PowerShell(npx prisma generate 2>&1)",
+      "Bash(mkdir -p \"D:/Web/EN_THAI_WEB/src/app/api/review\" && mkdir -p \"D:/Web/EN_THAI_WEB/src/app/api/review/[id]\")",
+      "PowerShell(Get-ChildItem \"C:\\\\Program Files\\\\nodejs\\\\\", \"C:\\\\Program Files \\(x86\\)\\\\nodejs\\\\\", \"$env:APPDATA\\\\npm\\\\\", \"$env:LOCALAPPDATA\\\\Programs\\\\nodejs\\\\\" -ErrorAction SilentlyContinue | Select-Object FullName -First 5)",
+      "PowerShell($env:PATH -split \";\" | Where-Object { $_ -match \"node|npm|nvm\" })",
+      "PowerShell(Stop-Process -Name node -Force -ErrorAction SilentlyContinue)"
     ]
   }
 }

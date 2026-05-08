@@ -113,7 +113,7 @@ export function scheduleDates(startDate: Date, count: number, busyDays: number[]
 
 // ─── Week themes ──────────────────────────────────────────────────────────────
 
-const ENGLISH_WEEK_THEMES: Record<Level, string[]> = {
+export const ENGLISH_WEEK_THEMES: Record<Level, string[]> = {
   A1: [
     "Giới thiệu bản thân & gia đình",
     "Số đếm, màu sắc, thời gian",
@@ -178,7 +178,7 @@ const ENGLISH_WEEK_THEMES: Record<Level, string[]> = {
   ],
 };
 
-const THAI_WEEK_THEMES: Record<Level, string[]> = {
+export const THAI_WEEK_THEMES: Record<Level, string[]> = {
   A1: [
     "ตัวอักษรไทย – พยัญชนะ",
     "ตัวอักษรไทย – สระและวรรณยุกต์",
@@ -235,13 +235,17 @@ const THAI_WEEK_THEMES: Record<Level, string[]> = {
   ],
 };
 
-// All 7 skill types in a meaningful order for learning
-const SKILL_TYPES = ["vocabulary", "grammar", "listening", "reading", "speaking", "writing", "review"];
+/** Skills available per learning focus */
+export const FOCUS_SKILLS: Record<string, string[]> = {
+  comprehensive:  ["vocabulary", "grammar", "listening", "reading", "speaking", "writing", "review"],
+  conversational: ["vocabulary", "listening", "speaking", "review"],
+  academic:       ["vocabulary", "grammar", "reading", "writing", "review"],
+};
 
-/** Choose skills for a given week, cycling through all 7 types */
-function getWeekSkills(weekIdx: number, n: number): string[] {
-  const offset = (weekIdx * n) % SKILL_TYPES.length;
-  return Array.from({ length: n }, (_, i) => SKILL_TYPES[(offset + i) % SKILL_TYPES.length]);
+/** Choose skills for a given week, cycling through the focus skill pool */
+function getWeekSkills(weekIdx: number, n: number, focusSkills: string[]): string[] {
+  const offset = (weekIdx * n) % focusSkills.length;
+  return Array.from({ length: n }, (_, i) => focusSkills[(offset + i) % focusSkills.length]);
 }
 
 // ─── Main generator ───────────────────────────────────────────────────────────
@@ -261,7 +265,8 @@ export function generateWeeklyPlan(
   totalWeeks: number,
   startDate: Date,
   busyDays: number[] = [],
-  weeklyHours = 7
+  weeklyHours = 7,
+  learningFocus = "comprehensive"
 ): WeekPlan[] {
   const themes = language === "english" ? ENGLISH_WEEK_THEMES : THAI_WEEK_THEMES;
   const fromIdx = LEVEL_ORDER.indexOf(fromLevel);
@@ -271,6 +276,9 @@ export function generateWeeklyPlan(
   for (let i = fromIdx; i <= toIdx; i++) {
     allThemes.push(...(themes[LEVEL_ORDER[i]] ?? []));
   }
+
+  // Resolve skill pool for this focus
+  const focusSkills = FOCUS_SKILLS[learningFocus] ?? FOCUS_SKILLS.comprehensive;
 
   // Lessons per week: bounded by available days and weekly hours
   const availableDaysPerWeek = Math.max(1, 7 - busyDays.length);
@@ -287,7 +295,7 @@ export function generateWeeklyPlan(
     const weekStart = new Date(startDate);
     weekStart.setDate(weekStart.getDate() + w * 7);
 
-    const skills = getWeekSkills(w, lessonsPerWeek);
+    const skills = getWeekSkills(w, lessonsPerWeek, focusSkills);
     const scheduledDates = allDates.slice(lessonIdx, lessonIdx + lessonsPerWeek);
     lessonIdx += lessonsPerWeek;
 

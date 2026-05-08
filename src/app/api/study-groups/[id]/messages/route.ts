@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getMessages, sendMessage, StudyGroupError } from "@/services/study-group.service";
+import { sseBroadcast } from "@/lib/sse-store";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -24,6 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   try {
     const message = await sendMessage(session.user.id, groupId, content);
+    sseBroadcast(groupId, { type: "chat", message });
     return NextResponse.json({ message });
   } catch (e) {
     if (e instanceof StudyGroupError) return NextResponse.json({ error: e.message }, { status: e.status });

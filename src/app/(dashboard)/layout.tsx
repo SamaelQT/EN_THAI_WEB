@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/db";
 import Sidebar from "@/components/Sidebar";
 
 export default async function DashboardLayout({
@@ -10,9 +11,20 @@ export default async function DashboardLayout({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
+  const uid = session.user.id!;
+
+  const [friendRequestCount, groupInviteCount] = await Promise.all([
+    prisma.friendship.count({ where: { receiverId: uid, status: "pending" } }),
+    prisma.studyGroupInvite.count({ where: { inviteeId: uid, status: "pending_invitee" } }),
+  ]);
+
   return (
     <div className="flex min-h-screen">
-      <Sidebar user={session.user} />
+      <Sidebar
+        user={session.user}
+        friendRequestCount={friendRequestCount}
+        groupInviteCount={groupInviteCount}
+      />
       <main className="flex-1 overflow-auto bg-muted/20">
         <div className="max-w-5xl mx-auto p-6">{children}</div>
       </main>

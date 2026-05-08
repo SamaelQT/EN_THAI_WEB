@@ -1,17 +1,29 @@
 import { prisma } from "@/lib/db";
 import { createNotification } from "./notification.service";
-import Anthropic from "@anthropic-ai/sdk";
-
-const client = new Anthropic();
+import { GoogleGenAI } from "@google/genai";
 
 const SYSTEM_PROMPT = `You are a language teaching assistant for Vietnamese learners studying English or Thai.
 Generate lesson content as valid JSON only — no markdown, no extra text.
 All explanations and instructions must be in Vietnamese.
 Keep examples natural and practical for everyday use.`;
 
-type GenerateRequest = { lessonType: string; language: string; level: string };
+type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string };
 
-function buildPrompt({ lessonType, language, level }: GenerateRequest): string {
+export function topicToSlug(topic: string): string {
+  return topic
+    .toLowerCase()
+    .replace(/[àáạảãâầấậẩẫăằắặẳẵ]/g, "a")
+    .replace(/[èéẹẻẽêềếệểễ]/g, "e")
+    .replace(/[ìíịỉĩ]/g, "i")
+    .replace(/[òóọỏõôồốộổỗơờớợởỡ]/g, "o")
+    .replace(/[ùúụủũưừứựửữ]/g, "u")
+    .replace(/[ỳýỵỷỹ]/g, "y")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function buildPrompt({ lessonType, language, level, topic }: GenerateRequest): string {
   const langLabel = language === "english" ? "tiếng Anh" : "tiếng Thái";
   const schemas: Record<string, string> = {
     vocabulary: `{
@@ -59,8 +71,9 @@ function buildPrompt({ lessonType, language, level }: GenerateRequest): string {
 
   const schema = schemas[lessonType] ?? schemas.vocabulary;
   const typeLabel = lessonType === "review" ? "ôn tập tổng hợp" : lessonType;
+  const topicLine = topic ? `Chủ đề bài học: "${topic}".\n` : "";
   return `Tạo một bài học ${typeLabel} về ${langLabel} cho trình độ ${level}.
-Bài học phải phù hợp với trình độ ${level} theo khung CEFR, với 6 mục (words/phrases nếu có) và 3 câu hỏi quiz.
+${topicLine}Bài học phải phù hợp với trình độ ${level} theo khung CEFR, với 6 mục (words/phrases nếu có) và 3 câu hỏi quiz.
 Trả về JSON hợp lệ theo schema sau, không có gì thêm:\n\n${schema}`;
 }
 
@@ -185,39 +198,100 @@ export async function completeLesson(
   return { xpGained, newStreak, newAchievements, weekAdvanced };
 }
 
+// ── Gemini helper ──────────────────────────────────────────────────────────
+
+async function callGemini(prompt: string): Promise<any> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+  const response = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config: { systemInstruction: SYSTEM_PROMPT },
+  });
+  const raw = response.text ?? "";
+  const cleaned = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+  return JSON.parse(cleaned);
+}
+
 // ── generateLesson ─────────────────────────────────────────────────────────
 
-export async function generateLesson(lessonType: string, language: string, level: string) {
+export async function generateLesson(lessonType: string, language: string, level: string, topic?: string, userId?: string) {
   if (!lessonType || !language || !level) throw new Error("Missing fields");
 
-  const lessonId = `${lessonType}_${language}_${level}`;
-  const cached = await prisma.lesson.findUnique({ where: { id: lessonId } });
-  if (cached && cached.content !== "{}") {
-    try { return JSON.parse(cached.content); } catch { /* fall through */ }
+  // Topic-based lesson: unique ID per topic, skip fallback chain
+  if (topic) {
+    const slug = topicToSlug(topic);
+    const topicId = `${lessonType}_${language}_${level}_${slug}`;
+
+    // Check if user already completed this lesson → generate fresh variant
+    const alreadyCompleted = userId
+      ? await prisma.lessonProgress.findFirst({ where: { userId, lessonId: topicId } })
+      : null;
+
+    if (!alreadyCompleted) {
+      const existing = await prisma.lesson.findUnique({ where: { id: topicId } });
+      if (existing && existing.content !== "{}") {
+        try { return JSON.parse(existing.content); } catch { /* fall through to generate */ }
+      }
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      const err = new Error("Bài học này chưa có sẵn.") as Error & { code: string };
+      err.code = "NO_API_KEY";
+      throw err;
+    }
+
+    const lesson = await callGemini(buildPrompt({ lessonType, language, level, topic }));
+
+    // Only cache if first time (not a variant for completed lesson)
+    if (!alreadyCompleted) {
+      await prisma.lesson.upsert({
+        where: { id: topicId },
+        update: { content: JSON.stringify(lesson), title: lesson.title ?? topicId },
+        create: { id: topicId, language, type: lessonType, level, title: lesson.title ?? topicId, content: JSON.stringify(lesson), xpReward: 15 },
+      });
+    }
+    return lesson;
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    const err = new Error("Bài học này chưa có sẵn. Vui lòng thử bài học khác hoặc liên hệ admin.") as Error & { code: string };
+  // No topic: use seeded lesson (exact match first)
+  const lessonId = `${lessonType}_${language}_${level}`;
+  const exact = await prisma.lesson.findUnique({ where: { id: lessonId } });
+  if (exact && exact.content !== "{}") {
+    try { return JSON.parse(exact.content); } catch { /* fall through */ }
+  }
+
+  // Fallback: same type + language, closest level
+  const LEVEL_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"];
+  const targetIdx = LEVEL_ORDER.indexOf(level);
+  const fallbacks = await prisma.lesson.findMany({
+    where: { language, type: lessonType, content: { not: "{}" } },
+  });
+  if (fallbacks.length > 0) {
+    const sorted = fallbacks.sort((a, b) => {
+      const da = Math.abs(LEVEL_ORDER.indexOf(a.level) - targetIdx);
+      const db = Math.abs(LEVEL_ORDER.indexOf(b.level) - targetIdx);
+      return da - db;
+    });
+    try { return JSON.parse(sorted[0].content); } catch { /* fall through */ }
+  }
+
+  // Last resort: same language, any type
+  const anyLesson = await prisma.lesson.findFirst({ where: { language, content: { not: "{}" } } });
+  if (anyLesson) {
+    try { return JSON.parse(anyLesson.content); } catch { /* fall through */ }
+  }
+
+  if (!process.env.GEMINI_API_KEY) {
+    const err = new Error("Bài học này chưa có sẵn.") as Error & { code: string };
     err.code = "NO_API_KEY";
     throw err;
   }
 
-  const message = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 1500,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: buildPrompt({ lessonType, language, level }) }],
-  });
-
-  const raw = message.content[0].type === "text" ? message.content[0].text : "";
-  const cleaned = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
-  const lesson = JSON.parse(cleaned);
-
+  const lesson = await callGemini(buildPrompt({ lessonType, language, level }));
   await prisma.lesson.upsert({
     where: { id: lessonId },
     update: { content: JSON.stringify(lesson), title: lesson.title ?? lessonId },
     create: { id: lessonId, language, type: lessonType, level, title: lesson.title ?? lessonId, content: JSON.stringify(lesson), xpReward: 15 },
   });
-
   return lesson;
 }

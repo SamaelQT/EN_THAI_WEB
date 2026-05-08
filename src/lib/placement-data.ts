@@ -597,13 +597,13 @@ export type Level = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 
 const LEVEL_ORDER: Level[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
-// Kept for server fallback only
+// Server fallback — calibrated to match per-level thresholds (3/4 per level = 75%)
 export function scoreToLevel(score: number): Level {
   if (score >= 95) return "C2";
-  if (score >= 85) return "C1";
-  if (score >= 70) return "B2";
-  if (score >= 52) return "B1";
-  if (score >= 35) return "A2";
+  if (score >= 75) return "C1";
+  if (score >= 50) return "B2";
+  if (score >= 30) return "B1";
+  if (score >= 15) return "A2";
   return "A1";
 }
 
@@ -643,7 +643,7 @@ export function calculateScore(questions: Question[], answers: (number | null)[]
   return Math.round((earned / MAX_SCORE) * 100);
 }
 
-// Level = level cao nhất đúng ≥ 2/4 câu (bỏ qua = sai)
+// Level = level cao nhất mà user pass được tất cả level bên dưới (ngưỡng 75% = 3/4 câu)
 export function determineLevel(questions: Question[], answers: (number | null)[]): Level {
   const stats: Record<string, { correct: number; total: number }> = {};
   for (let i = 0; i < questions.length; i++) {
@@ -652,10 +652,13 @@ export function determineLevel(questions: Question[], answers: (number | null)[]
     stats[lvl].total++;
     if (answers[i] === questions[i].answer) stats[lvl].correct++;
   }
-  const order: Level[] = ["C1", "B2", "B1", "A2", "A1"];
+  // Duyệt từ thấp lên cao, dừng khi fail một level
+  const order: Level[] = ["A1", "A2", "B1", "B2", "C1"];
+  let result: Level = "A1";
   for (const lvl of order) {
     const s = stats[lvl];
-    if (s && s.correct / s.total >= 0.5) return lvl;
+    if (!s || s.correct / s.total < 0.75) break;
+    result = lvl;
   }
-  return "A1";
+  return result;
 }
