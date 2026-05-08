@@ -10,19 +10,19 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        value: file:/data/prod.db
-      - key: UPLOAD_DIR
-        value: /data/avatars
+        sync: false          # MongoDB Atlas connection string — set manually in Render dashboard
+                             # e.g. mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/linguapath?retryWrites=true&w=majority
       - key: AUTH_SECRET
         generateValue: true
-      - key: ANTHROPIC_API_KEY
-        sync: false          # set manually in Render dashboard
       - key: NEXTAUTH_URL
-        sync: false          # set to your Render URL, e.g. https://linguapath.onrender.com
+        sync: false          # Set to your Render URL, e.g. https://linguapath.onrender.com
+      - key: ANTHROPIC_API_KEY
+        sync: false          # Set manually in Render dashboard
+      - key: UPLOAD_DIR
+        value: /data/avatars
 
-    # Persistent disk — required to keep DB + avatars across deploys
-    # NOTE: disk requires a paid plan (Starter $7/mo or higher)
-    # Remove the disk section if using free tier (data resets on each deploy)
+    # Persistent disk for avatar uploads — requires Starter plan ($7/mo)
+    # Comment out disk section if using free tier (avatars will reset on redeploy)
     disk:
       name: linguapath-data
       mountPath: /data
