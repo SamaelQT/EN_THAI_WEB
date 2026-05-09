@@ -33,7 +33,10 @@
       "Bash(mkdir -p \"D:/Web/EN_THAI_WEB/src/app/api/review\" && mkdir -p \"D:/Web/EN_THAI_WEB/src/app/api/review/[id]\")",
       "PowerShell(Get-ChildItem \"C:\\\\Program Files\\\\nodejs\\\\\", \"C:\\\\Program Files \\(x86\\)\\\\nodejs\\\\\", \"$env:APPDATA\\\\npm\\\\\", \"$env:LOCALAPPDATA\\\\Programs\\\\nodejs\\\\\" -ErrorAction SilentlyContinue | Select-Object FullName -First 5)",
       "PowerShell($env:PATH -split \";\" | Where-Object { $_ -match \"node|npm|nvm\" })",
-      "PowerShell(Stop-Process -Name node -Force -ErrorAction SilentlyContinue)"
+      "PowerShell(Stop-Process -Name node -Force -ErrorAction SilentlyContinue)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
