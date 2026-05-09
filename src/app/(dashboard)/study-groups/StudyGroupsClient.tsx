@@ -163,7 +163,7 @@ export default function StudyGroupsClient({ myGroups: initialGroups, currentUser
           ev.voiceUsers.filter((u) => u.userId !== currentUserId).map((u) => [u.userId, { ...u, muted: false }])
         ));
         if (ev.quizState) {
-          setQuizState({ ...ev.quizState, answeredBy: [] });
+          setQuizState({ ...ev.quizState, answeredBy: [] as string[] });
           setQuizReveal(null);
           setQuizLeaderboard(null);
           setMyAnswer(null);
