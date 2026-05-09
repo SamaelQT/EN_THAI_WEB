@@ -36,7 +36,8 @@
       "PowerShell(Stop-Process -Name node -Force -ErrorAction SilentlyContinue)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(copy src\\\\proxy.ts src\\\\middleware.ts)"
     ]
   }
 }
