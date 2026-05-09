@@ -2,6 +2,7 @@ import type { NextAuthConfig } from "next-auth";
 
 // Minimal config for edge middleware — no Prisma, no Node.js APIs
 export const authConfig: NextAuthConfig = {
+  trustHost: true,
   pages: { signIn: "/login" },
   callbacks: {
     authorized({ auth, request }) {
