@@ -59,7 +59,7 @@ type QuizLeaderboard = Array<{
 // ─── SSE events ───────────────────────────────────────────────────────────────
 
 type SSEEvent =
-  | { type: "init"; messages: Message[]; voiceUsers: Array<{ userId: string; name: string | null; image: string | null }>; quizState: Omit<QuizState, "answeredBy"> | null }
+  | { type: "init"; messages: Message[]; voiceUsers: Array<{ userId: string; name: string | null; image: string | null }>; quizState: Omit<NonNullable<QuizState>, "answeredBy"> | null }
   | { type: "chat"; message: Message }
   | { type: "signal"; subtype: "offer" | "answer" | "ice-candidate"; from: string; sdp?: string; candidate?: RTCIceCandidateInit }
   | { type: "join-voice"; from: string; name: string | null; image: string | null }
