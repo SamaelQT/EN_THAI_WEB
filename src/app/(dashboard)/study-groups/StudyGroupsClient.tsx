@@ -89,7 +89,7 @@ export default function StudyGroupsClient({ myGroups: initialGroups, currentUser
 
   // Groups + selection
   const [groups, setGroups] = useState<Group[]>(initialGroups);
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(initialGroups[0]?.id ?? null);
   const selectedGroup = groups.find((g) => g.id === selectedGroupId) ?? null;
 
   // Chat
