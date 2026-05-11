@@ -7,7 +7,7 @@ Generate lesson content as valid JSON only — no markdown, no extra text.
 All explanations and instructions must be in Vietnamese.
 Keep examples natural and practical for everyday use.`;
 
-type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string };
+type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string; examType?: string };
 
 export function topicToSlug(topic: string): string {
   return topic
@@ -23,8 +23,17 @@ export function topicToSlug(topic: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-function buildPrompt({ lessonType, language, level, topic }: GenerateRequest): string {
+function buildPrompt({ lessonType, language, level, topic, examType }: GenerateRequest): string {
   const langLabel = language === "english" ? "tiếng Anh" : "tiếng Thái";
+
+  // Exam-specific context injected into the prompt
+  const examContext: Record<string, string> = {
+    TOEIC: `Bài học này phục vụ ôn thi TOEIC (Listening & Reading). Tập trung vào từ vựng kinh doanh, văn phòng; ngữ pháp Part 5-6; chiến lược nghe Part 1-4; đọc Part 7. KHÔNG dùng nội dung Speaking hay Writing IELTS. Câu hỏi quiz mô phỏng định dạng TOEIC Part 5 (chọn từ điền vào chỗ trống) và Part 7 (đọc hiểu).`,
+    IELTS: `Bài học này phục vụ ôn thi IELTS (Academic). Tập trung đúng kỹ năng: Listening theo Section 1-4, Reading dạng T/F/NG & matching, Writing Task 1 (biểu đồ) hoặc Task 2 (essay), Speaking theo Part 1-3 với band descriptor. Câu hỏi quiz mô phỏng định dạng IELTS thực tế.`,
+    general: `Bài học này theo khung CEFR tổng quát, không gắn với kỳ thi cụ thể. Tập trung giao tiếp thực tế, từ vựng hàng ngày và ngữ pháp nền tảng.`,
+  };
+  const examNote = examType && examContext[examType] ? `\n${examContext[examType]}` : "";
+
   const schemas: Record<string, string> = {
     vocabulary: `{
   "title": "Tên bài học",
@@ -73,7 +82,8 @@ function buildPrompt({ lessonType, language, level, topic }: GenerateRequest): s
   const typeLabel = lessonType === "review" ? "ôn tập tổng hợp" : lessonType;
   const topicLine = topic ? `Chủ đề bài học: "${topic}".\n` : "";
   return `Tạo một bài học ${typeLabel} về ${langLabel} cho trình độ ${level}.
-${topicLine}Bài học phải phù hợp với trình độ ${level} theo khung CEFR, với 6 mục (words/phrases nếu có) và 3 câu hỏi quiz.
+${topicLine}${examNote}
+Bài học phải phù hợp với trình độ ${level} theo khung CEFR, với 6 mục (words/phrases nếu có) và 3 câu hỏi quiz.
 Trả về JSON hợp lệ theo schema sau, không có gì thêm:\n\n${schema}`;
 }
 
@@ -216,13 +226,15 @@ async function callAI(prompt: string): Promise<any> {
 
 // ── generateLesson ─────────────────────────────────────────────────────────
 
-export async function generateLesson(lessonType: string, language: string, level: string, topic?: string, userId?: string) {
+export async function generateLesson(lessonType: string, language: string, level: string, topic?: string, userId?: string, examType?: string) {
   if (!lessonType || !language || !level) throw new Error("Missing fields");
 
   // Topic-based lesson: unique ID per topic, skip fallback chain
   if (topic) {
     const slug = topicToSlug(topic);
-    const topicId = `${lessonType}_${language}_${level}_${slug}`;
+    // Include examType in cache key so TOEIC/IELTS lessons are stored separately
+    const examSuffix = examType && examType !== "general" ? `_${examType.toLowerCase()}` : "";
+    const topicId = `${lessonType}_${language}_${level}_${slug}${examSuffix}`;
 
     // Check if user already completed this lesson → generate fresh variant
     const alreadyCompleted = userId
@@ -242,7 +254,7 @@ export async function generateLesson(lessonType: string, language: string, level
       throw err;
     }
 
-    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic }));
+    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic, examType }));
 
     // Only cache if first time (not a variant for completed lesson)
     if (!alreadyCompleted) {

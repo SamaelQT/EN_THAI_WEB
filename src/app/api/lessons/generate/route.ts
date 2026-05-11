@@ -6,9 +6,9 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { lessonType, language, level, topic } = await req.json();
+  const { lessonType, language, level, topic, examType } = await req.json();
   try {
-    const lesson = await generateLesson(lessonType, language, level, topic, session.user.id);
+    const lesson = await generateLesson(lessonType, language, level, topic, session.user.id, examType);
     return NextResponse.json(lesson);
   } catch (e) {
     const err = e as Error & { code?: string; status?: number };

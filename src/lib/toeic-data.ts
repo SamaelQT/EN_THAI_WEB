@@ -315,27 +315,331 @@ const P7_HARD: ToeicQuestion[] = [
   },
 ];
 
-// ─── All questions combined ───────────────────────────────────────────────────
+// ─── Part 5 – Easy Set B ─────────────────────────────────────────────────────
 
-export const TOEIC_QUESTIONS: ToeicQuestion[] = [
-  ...P5_EASY,
-  ...P5_MEDIUM,
-  ...P5_HARD,
-  ...P7_EASY,
-  ...P7_MEDIUM,
-  ...P7_HARD,
+const P5_EASY_B: ToeicQuestion[] = [
+  {
+    id: "toeic-p5-e6",
+    part: "part5",
+    difficulty: "easy",
+    question: "The sales team will meet _____ Monday morning to discuss Q4 targets.",
+    options: ["on", "at", "in", "for"],
+    answer: 0,
+  },
+  {
+    id: "toeic-p5-e7",
+    part: "part5",
+    difficulty: "easy",
+    question: "All meeting rooms _____ reserved in advance through the online booking system.",
+    options: ["can be", "must be", "will", "has"],
+    answer: 1,
+  },
+  {
+    id: "toeic-p5-e8",
+    part: "part5",
+    difficulty: "easy",
+    question: "The technician repaired the printer _____ a few minutes.",
+    options: ["on", "at", "in", "for"],
+    answer: 2,
+  },
+  {
+    id: "toeic-p5-e9",
+    part: "part5",
+    difficulty: "easy",
+    question: "Employees _____ submit their timesheets by the last working day of the month.",
+    options: ["ought", "should", "would", "may be"],
+    answer: 1,
+  },
 ];
+
+// ─── Part 5 – Medium Set B ────────────────────────────────────────────────────
+
+const P5_MEDIUM_B: ToeicQuestion[] = [
+  {
+    id: "toeic-p5-m6",
+    part: "part5",
+    difficulty: "medium",
+    question: "The marketing manager suggested that the team _____ a new campaign before the end of the quarter.",
+    options: ["launched", "launch", "launching", "to launch"],
+    answer: 1,
+  },
+  {
+    id: "toeic-p5-m7",
+    part: "part5",
+    difficulty: "medium",
+    question: "The report _____ by the committee was forwarded to the board for final review.",
+    options: ["preparing", "prepares", "prepared", "preparer"],
+    answer: 2,
+  },
+  {
+    id: "toeic-p5-m8",
+    part: "part5",
+    difficulty: "medium",
+    question: "All customer inquiries will _____ within two business days of receipt.",
+    options: ["addressed", "be addressed", "address", "addressing"],
+    answer: 1,
+  },
+  {
+    id: "toeic-p5-m9",
+    part: "part5",
+    difficulty: "medium",
+    question: "The position requires _____ in project management and strong communication skills.",
+    options: ["expertise", "expert", "expertly", "expertness"],
+    answer: 0,
+  },
+];
+
+// ─── Part 5 – Hard Set B ──────────────────────────────────────────────────────
+
+const P5_HARD_B: ToeicQuestion[] = [
+  {
+    id: "toeic-p5-h6",
+    part: "part5",
+    difficulty: "hard",
+    question: "Rarely _____ a product that simultaneously reduces costs and improves quality.",
+    options: [
+      "we have seen",
+      "have we seen",
+      "did we saw",
+      "we saw",
+    ],
+    answer: 1,
+  },
+  {
+    id: "toeic-p5-h7",
+    part: "part5",
+    difficulty: "hard",
+    question: "The merger agreement, _____ after months of negotiation, was seen as a landmark deal in the industry.",
+    options: [
+      "finalizing",
+      "having been finalized",
+      "to be finalize",
+      "been finalized",
+    ],
+    answer: 1,
+  },
+  {
+    id: "toeic-p5-h8",
+    part: "part5",
+    difficulty: "hard",
+    question: "The unexpected decline in sales was attributed _____ to the supply chain disruptions earlier in the year.",
+    options: ["largely", "large", "largeness", "enlarge"],
+    answer: 0,
+  },
+  {
+    id: "toeic-p5-h9",
+    part: "part5",
+    difficulty: "hard",
+    question: "_____ the regulatory approval is granted, the company plans to launch the product in three new markets.",
+    options: ["In case of", "Provided that", "Apart from", "Given to"],
+    answer: 1,
+  },
+];
+
+// ─── Part 7 – Easy Set B ──────────────────────────────────────────────────────
+
+const PASSAGE_EASY_B =
+  "To: All Staff\nFrom: Director of Communications\nRe: Company Newsletter – Submission Deadline\n\n" +
+  "The next edition of our company newsletter will be published on November 1st. " +
+  "All staff members are encouraged to submit articles, department updates, or personal achievements. " +
+  "The submission deadline is October 20th. " +
+  "Content should be sent to newsletter@company.com. " +
+  "Submissions may be edited for length and clarity. " +
+  "The newsletter will be distributed digitally to all employees and posted on the staff intranet.";
+
+const P7_EASY_B: ToeicQuestion[] = [
+  {
+    id: "toeic-p7-e4",
+    part: "part7",
+    difficulty: "easy",
+    passage: PASSAGE_EASY_B,
+    question: "When will the newsletter be published?",
+    options: ["October 1st", "October 20th", "November 1st", "November 20th"],
+    answer: 2,
+  },
+  {
+    id: "toeic-p7-e5",
+    part: "part7",
+    difficulty: "easy",
+    passage: PASSAGE_EASY_B,
+    question: "What is the deadline for content submissions?",
+    options: ["October 11th", "October 20th", "November 1st", "November 15th"],
+    answer: 1,
+  },
+  {
+    id: "toeic-p7-e6",
+    part: "part7",
+    difficulty: "easy",
+    passage: PASSAGE_EASY_B,
+    question: "How will the newsletter be distributed?",
+    options: [
+      "Printed and mailed to employees",
+      "Delivered during the staff meeting",
+      "Digitally to all employees",
+      "Posted on the company's social media",
+    ],
+    answer: 2,
+  },
+];
+
+// ─── Part 7 – Medium Set B ────────────────────────────────────────────────────
+
+const PASSAGE_MEDIUM_B =
+  "INTERNAL ANNOUNCEMENT\nFrom: Operations Manager\nTo: All Branch Offices\nRe: Updated Customer Service Protocol – Effective March 1st\n\n" +
+  "Effective March 1st, all customer service representatives are required to follow the revised three-step resolution protocol for handling complaints. " +
+  "Step one requires acknowledgment of the customer's concern within four business hours of first contact. " +
+  "Step two involves offering a resolution or escalating to a supervisor if the issue exceeds the representative's authority. " +
+  "Step three requires a follow-up call or email within three business days to confirm customer satisfaction. " +
+  "All interactions must be logged in the CRM system within one hour of completion. " +
+  "Non-compliance may result in a formal performance review.";
+
+const P7_MEDIUM_B: ToeicQuestion[] = [
+  {
+    id: "toeic-p7-m5",
+    part: "part7",
+    difficulty: "medium",
+    passage: PASSAGE_MEDIUM_B,
+    question: "What is the first step in the new complaint resolution protocol?",
+    options: [
+      "Offer a refund immediately",
+      "Escalate to a supervisor",
+      "Acknowledge the customer's concern within four hours",
+      "Log the interaction in the CRM system",
+    ],
+    answer: 2,
+  },
+  {
+    id: "toeic-p7-m6",
+    part: "part7",
+    difficulty: "medium",
+    passage: PASSAGE_MEDIUM_B,
+    question: "When should a representative escalate a complaint?",
+    options: [
+      "After 3 business days",
+      "When the issue is beyond their authority",
+      "Only with the customer's written permission",
+      "After the CRM log is completed",
+    ],
+    answer: 1,
+  },
+  {
+    id: "toeic-p7-m7",
+    part: "part7",
+    difficulty: "medium",
+    passage: PASSAGE_MEDIUM_B,
+    question: "How soon must interactions be logged in the CRM system?",
+    options: ["Within 30 minutes", "Within one hour", "Within four hours", "Within one business day"],
+    answer: 1,
+  },
+  {
+    id: "toeic-p7-m8",
+    part: "part7",
+    difficulty: "medium",
+    passage: PASSAGE_MEDIUM_B,
+    question: "What may happen to a representative who does not follow the new protocol?",
+    options: [
+      "Immediate dismissal",
+      "A pay reduction",
+      "A formal performance review",
+      "Reassignment to another department",
+    ],
+    answer: 2,
+  },
+];
+
+// ─── Part 7 – Hard Set B ──────────────────────────────────────────────────────
+
+const PASSAGE_HARD_B =
+  "The debate over shareholder primacy versus stakeholder capitalism has intensified following a series of high-profile corporate governance failures. " +
+  "Proponents of shareholder primacy argue that companies maximise societal benefit by focusing exclusively on generating returns for investors, " +
+  "allowing market mechanisms to allocate resources efficiently. " +
+  "Critics contend that this model systematically externalises costs onto employees, communities, and the environment — " +
+  "parties that bear significant risk without holding formal voting rights. " +
+  "A growing coalition of institutional investors has begun incorporating environmental, social, and governance (ESG) criteria into investment frameworks, " +
+  "signalling a structural shift in expectations of corporate accountability. " +
+  "Whether this trend represents a fundamental recalibration of capitalism or merely reputational management remains highly contested.";
+
+const P7_HARD_B: ToeicQuestion[] = [
+  {
+    id: "toeic-p7-h4",
+    part: "part7",
+    difficulty: "hard",
+    passage: PASSAGE_HARD_B,
+    question: "What is the main subject of the article?",
+    options: [
+      "The benefits of ESG investing for retail investors",
+      "The debate between shareholder and stakeholder business models",
+      "How corporate governance failures led to new regulations",
+      "Why institutional investors outperform retail investors",
+    ],
+    answer: 1,
+  },
+  {
+    id: "toeic-p7-h5",
+    part: "part7",
+    difficulty: "hard",
+    passage: PASSAGE_HARD_B,
+    question: "What do critics argue about the shareholder primacy model?",
+    options: [
+      "It gives employees too much influence over decisions",
+      "It transfers all financial risk to the government",
+      "It shifts costs onto stakeholders who have no voting rights",
+      "It results in excessive regulation of financial markets",
+    ],
+    answer: 2,
+  },
+  {
+    id: "toeic-p7-h6",
+    part: "part7",
+    difficulty: "hard",
+    passage: PASSAGE_HARD_B,
+    question: "The author's tone regarding ESG adoption can best be described as:",
+    options: [
+      "Strongly supportive and optimistic",
+      "Neutral and analytical with unresolved conclusions",
+      "Dismissive and critical of institutional investors",
+      "Alarmed by recent corporate governance failures",
+    ],
+    answer: 1,
+  },
+];
+
+// ─── Selection helpers ────────────────────────────────────────────────────────
+
+function pickN<T>(arr: T[], n: number): T[] {
+  return [...arr].sort(() => Math.random() - 0.5).slice(0, Math.min(n, arr.length));
+}
+
+function pickOne<T>(a: T[], b: T[]): T[] {
+  return Math.random() < 0.5 ? [...a] : [...b];
+}
 
 // Weights: easy=1, medium=2, hard=3
 const WEIGHTS: Record<string, number> = { easy: 1, medium: 2, hard: 3 };
-const MAX_RAW = TOEIC_QUESTIONS.reduce((s, q) => s + WEIGHTS[q.difficulty], 0); // 50
+// Always 8 easy + 9 medium + 8 hard = MAX_RAW 50 regardless of which specific questions are picked
+const MAX_RAW = 50;
 
 export function getToeicQuestions(): ToeicQuestion[] {
-  // shuffle within each difficulty tier, then interleave
-  const byDiff = (d: string) =>
-    [...TOEIC_QUESTIONS.filter((q) => q.difficulty === d)].sort(() => Math.random() - 0.5);
-  return [...byDiff("easy"), ...byDiff("medium"), ...byDiff("hard")];
+  // Pick 5 Part 5 from combined pool per tier
+  const p5Easy   = pickN([...P5_EASY, ...P5_EASY_B], 5);
+  const p5Medium = pickN([...P5_MEDIUM, ...P5_MEDIUM_B], 5);
+  const p5Hard   = pickN([...P5_HARD, ...P5_HARD_B], 5);
+  // Randomly pick one Part 7 passage set per tier
+  const p7Easy   = pickOne(P7_EASY, P7_EASY_B);
+  const p7Medium = pickOne(P7_MEDIUM, P7_MEDIUM_B);
+  const p7Hard   = pickOne(P7_HARD, P7_HARD_B);
+  return [...p5Easy, ...p5Medium, ...p5Hard, ...p7Easy, ...p7Medium, ...p7Hard];
 }
+
+// Keep backward-compat export (all questions combined, not used for tests directly)
+export const TOEIC_QUESTIONS: ToeicQuestion[] = [
+  ...P5_EASY, ...P5_EASY_B,
+  ...P5_MEDIUM, ...P5_MEDIUM_B,
+  ...P5_HARD, ...P5_HARD_B,
+  ...P7_EASY, ...P7_EASY_B,
+  ...P7_MEDIUM, ...P7_MEDIUM_B,
+  ...P7_HARD, ...P7_HARD_B,
+];
 
 export type ToeicResult = {
   score: number;

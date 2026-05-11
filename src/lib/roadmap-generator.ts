@@ -114,82 +114,208 @@ export function scheduleDates(startDate: Date, count: number, busyDays: number[]
   return dates;
 }
 
-// ─── Week themes ──────────────────────────────────────────────────────────────
+// ─── TOEIC Week Themes ────────────────────────────────────────────────────────
+// Focused on Listening (Part 1-4) + Reading (Part 5-7). No speaking/writing.
 
-export const ENGLISH_WEEK_THEMES: Record<Level, string[]> = {
+export const TOEIC_WEEK_THEMES: Record<Level, string[]> = {
   A1: [
-    "Giới thiệu bản thân & gia đình",
-    "Số đếm, màu sắc, thời gian",
-    "Đồ vật hàng ngày & nhà cửa",
-    "Thức ăn & mua sắm",
+    "Part 1 – Mô tả ảnh cơ bản: Vật thể & địa điểm",
+    "Part 2 – Câu hỏi Yes/No đơn giản",
+    "Từ vựng TOEIC – Số đếm, thời gian, ngày tháng",
+    "Từ vựng TOEIC – Đồ vật văn phòng thông dụng",
   ],
   A2: [
-    "Động từ thường gặp & thì hiện tại",
-    "Du lịch & phương tiện",
-    "Sức khỏe & cơ thể",
-    "Nghề nghiệp & nơi làm việc",
-    "Thì quá khứ đơn",
-    "So sánh & tính từ",
+    "Part 1 – Mô tả người và hành động trong ảnh",
+    "Part 2 – Câu hỏi Wh- (What / Where / When / Who)",
+    "Part 5 – Nhận biết từ loại: Danh từ & Động từ",
+    "Part 5 – Mạo từ a/an/the trong câu TOEIC",
+    "Từ vựng TOEIC – Văn phòng & thiết bị cơ bản",
+    "Part 2 – Tag questions & Câu hỏi gián tiếp",
   ],
   B1: [
-    "Từ vựng TOEIC – Văn phòng",
-    "Thì hoàn thành & liên tục",
-    "Điều kiện type 1 & 2",
-    "Từ đồng nghĩa & trái nghĩa",
-    "Đọc hiểu – Email & thư",
-    "Nghe – Thông báo & hướng dẫn",
-    "Viết – Paragraph cơ bản",
-    "Phát âm – Trọng âm từ",
+    "Part 3 – Hội thoại ngắn: Chủ đề công việc & cuộc hẹn",
+    "Part 4 – Bài nói: Thông báo nội bộ & hướng dẫn",
+    "Part 5 – Giới từ & Liên từ thông dụng",
+    "Part 5 – Đại từ & Câu bị động cơ bản",
+    "Part 6 – Điền từ vào đoạn email & memo",
+    "Part 7 – Đọc email & thư từ đơn lẻ",
+    "Từ vựng TOEIC – Tài chính, ngân hàng & kế toán",
+    "Từ vựng TOEIC – Nhân sự, tuyển dụng & phúc lợi",
   ],
   B2: [
-    "Collocation nâng cao",
-    "Câu bị động & đảo ngữ",
-    "Từ vựng học thuật (AWL)",
-    "Đọc hiểu – Bài báo & essay",
-    "Nghe – Lecture & podcast",
-    "Viết – Opinion essay",
-    "TOEIC Part 5 & 6 chiến lược",
-    "TOEIC Part 7 – Đọc nhiều đoạn",
-    "IELTS Task 1 – Biểu đồ",
-    "IELTS Task 2 – Luận điểm",
-    "Phrasal verbs trong ngữ cảnh",
-    "Grammar – Subjunctive & Inversion",
+    "Part 3 – Hội thoại 3 người & câu hỏi suy luận ngụ ý",
+    "Part 4 – Bài nói dài: Quảng cáo, tin tức & báo cáo",
+    "Part 5 – Thì hoàn thành & Câu điều kiện",
+    "Part 5 – Câu bị động nâng cao & Câu phức",
+    "Part 6 – Câu nối ý & cohesion devices trong đoạn văn",
+    "Part 7 – Đọc nhiều đoạn: Email + Thông báo ghép",
+    "Part 7 – Biểu đồ & Bảng biểu kèm văn bản",
+    "Part 7 – Câu hỏi suy luận & NOT TRUE",
+    "Từ vựng TOEIC – Logistics, vận chuyển & xuất nhập khẩu",
+    "Từ vựng TOEIC – Marketing, bán hàng & chăm sóc khách hàng",
+    "Chiến lược quản lý thời gian – Phân bổ 120 phút thi",
+    "Mock Test Part 5 & 6 – Phân tích lỗi sai chi tiết",
   ],
   C1: [
-    "Idioms & fixed expressions",
-    "Academic writing nâng cao",
-    "Listening – native speed content",
-    "Speaking – Fluency & cohesion",
-    "IELTS Speaking Part 2 & 3",
-    "Vocabulary in context – C1 level",
-    "Complex grammar – Cleft & Fronting",
-    "Error correction & proofreading",
-    "Mock IELTS test & review",
-    "Mock TOEIC test & review",
-    "Presentation & public speaking",
-    "Negotiation & formal language",
-    "Literature & media analysis",
-    "Final review & exam strategies",
-    "Practice under exam conditions",
-    "Confidence building & mindset",
+    "Mock TOEIC Full Test – Phân tích toàn diện Part 1-7",
+    "Part 7 – Double & Triple passages: Chiến lược đọc nhanh",
+    "Part 3 & 4 – Kỹ năng dự đoán đáp án trước khi nghe",
+    "Từ vựng C1 – Business English nâng cao",
+    "Ngữ pháp nâng cao – Inversion, Cleft sentences",
+    "Tốc độ đọc – Speed reading Part 7 mục tiêu 990",
+    "Mock Test 990 – Phân tích lỗi sai & chiến lược điểm cao",
+    "Final sprint – Điểm 900+ mindset & exam conditions",
   ],
   C2: [
-    "Advanced literature analysis",
-    "Nuance & register mastery",
-    "Native-level idioms",
-    "Advanced academic writing",
+    "Perfect 990 strategies & error-zero mindset",
+    "Advanced business vocabulary mastery",
+    "Full mock test under timed conditions",
+    "Final exam review & confidence building",
   ],
 };
 
+// ─── IELTS Week Themes ────────────────────────────────────────────────────────
+// All 4 skills: Listening, Reading, Writing (Task 1 & 2), Speaking (3 parts).
+
+export const IELTS_WEEK_THEMES: Record<Level, string[]> = {
+  A1: [
+    "Phát âm nền tảng – Âm cơ bản tiếng Anh cho IELTS",
+    "Từ vựng A1 – Chủ đề cuộc sống hàng ngày",
+    "Ngữ pháp nền – Thì hiện tại & quá khứ",
+    "Giới thiệu cấu trúc bài thi IELTS 4 kỹ năng",
+  ],
+  A2: [
+    "Listening Section 1 – Form completion & Note taking",
+    "Reading – Kỹ năng skimming & scanning cơ bản",
+    "Writing Task 1 General – Viết thư thân mật (Band 4)",
+    "Speaking Part 1 – Giới thiệu bản thân & câu trả lời ngắn",
+    "Từ vựng IELTS – Gia đình, nhà cửa & cuộc sống hàng ngày",
+    "Ngữ pháp IELTS – Câu đơn, câu ghép & linking words",
+  ],
+  B1: [
+    "Listening Section 2 – Monologue hướng dẫn & thông tin địa điểm",
+    "Reading – True / False / Not Given strategies",
+    "Reading – Matching headings & paragraph features",
+    "Writing Task 2 – Cấu trúc bài essay: Intro & Body",
+    "Writing Task 1 Academic – Mô tả biểu đồ đường & cột",
+    "Speaking Part 2 – Cue card: Chuẩn bị 1 phút, nói 2 phút",
+    "Từ vựng IELTS – Giáo dục, xã hội & môi trường",
+    "Ngữ pháp IELTS – Câu phức, mệnh đề quan hệ & liên từ nâng cao",
+  ],
+  B2: [
+    "Listening Section 3 – Thảo luận học thuật nhóm",
+    "Listening Section 4 – Lecture học thuật & điền từ",
+    "Reading – Matching information & sentence completion",
+    "Reading – Summary completion & diagram labelling",
+    "Writing Task 2 – Opinion essay Band 6-7: Lập luận & dẫn chứng",
+    "Writing Task 2 – Discussion essay: Both sides + Opinion",
+    "Writing Task 1 Academic – Biểu đồ tròn & bảng số liệu",
+    "Writing Task 1 Academic – Process diagram & Map description",
+    "Speaking Part 3 – Thảo luận chủ đề trừu tượng & phản biện",
+    "Collocation & AWL – Từ vựng học thuật cấp độ B2",
+    "Ngữ pháp IELTS – Câu bị động, đảo ngữ & câu điều kiện",
+    "Mock Test Band 6 – Phân tích từng kỹ năng & cải thiện",
+  ],
+  C1: [
+    "Listening – Suy luận & câu hỏi khó Section 3 & 4",
+    "Reading – Passage học thuật phức tạp & câu hỏi suy luận",
+    "Writing Task 2 – Argumentative essay Band 7-8",
+    "Writing Task 2 – Problem-solution & Cause-effect essay",
+    "Writing Task 1 – Tổng hợp & so sánh nhiều biểu đồ",
+    "Speaking – Fluency, coherence & cohesion Band 7",
+    "Speaking – Từ vựng phong phú & phát âm chuẩn",
+    "Lexical resource C1 – Paraphrase & synonyms nâng cao",
+    "Grammatical range – Complex structures & varied tenses",
+    "Mock IELTS Test – Target Band 7 toàn diện",
+    "Mock IELTS Test – Target Band 7.5 & Writing correction",
+    "Chiến lược làm bài thi IELTS – Phân bổ thời gian tối ưu",
+  ],
+  C2: [
+    "IELTS Band 8-9 – Chiến lược đạt điểm gần hoàn hảo",
+    "Academic writing mastery – Sophistication & precision",
+    "Near-native pronunciation, intonation & fluency",
+    "Final mock test & confidence building for exam day",
+  ],
+};
+
+// ─── CEFR Week Themes (General English) ──────────────────────────────────────
+// Pure communicative competence — no exam branding.
+
+export const CEFR_WEEK_THEMES: Record<Level, string[]> = {
+  A1: [
+    "Giới thiệu bản thân & gia đình",
+    "Số đếm, màu sắc & thời gian",
+    "Đồ vật hàng ngày & nhà cửa",
+    "Thức ăn, đồ uống & mua sắm",
+  ],
+  A2: [
+    "Động từ thường gặp & thì hiện tại đơn",
+    "Du lịch & phương tiện giao thông",
+    "Sức khỏe & cơ thể",
+    "Nghề nghiệp & nơi làm việc",
+    "Thì quá khứ đơn & quá khứ liên tục",
+    "So sánh hơn & so sánh nhất",
+  ],
+  B1: [
+    "Giao tiếp hàng ngày – Ý kiến & cảm xúc",
+    "Thì hiện tại hoàn thành & hoàn thành liên tục",
+    "Câu điều kiện loại 1 & loại 2",
+    "Từ đồng nghĩa, trái nghĩa & từ ghép",
+    "Đọc hiểu – Email & thư từ thông dụng",
+    "Nghe – Thông báo, hướng dẫn & bài phát biểu",
+    "Viết – Đoạn văn cơ bản có cấu trúc rõ ràng",
+    "Phát âm – Trọng âm từ & nhịp điệu câu",
+  ],
+  B2: [
+    "Collocation nâng cao & cụm từ thành ngữ",
+    "Câu bị động, đảo ngữ & câu nhấn mạnh",
+    "Từ vựng học thuật (AWL) căn bản",
+    "Đọc hiểu – Bài báo, bài luận & báo cáo",
+    "Nghe – Bài giảng, podcast & phim tài liệu",
+    "Viết – Opinion essay có lập luận",
+    "Phrasal verbs & idioms trong ngữ cảnh thực tế",
+    "Ngữ pháp – Subjunctive & Inversion",
+    "Kỹ năng thuyết trình & diễn đạt ý kiến",
+    "Văn phong trang trọng & thân mật trong từng bối cảnh",
+    "Phân tích & đánh giá văn bản phức tạp",
+    "Ôn tập & củng cố toàn diện B2",
+  ],
+  C1: [
+    "Idioms, fixed expressions & cultural references",
+    "Viết học thuật nâng cao – Argumentation & cohesion",
+    "Nghe – Nội dung tốc độ tự nhiên, giọng vùng miền",
+    "Nói – Fluency, coherence & discourse markers",
+    "Từ vựng trong ngữ cảnh – Nuance & connotation C1",
+    "Ngữ pháp phức tạp – Cleft sentences & Fronting",
+    "Sửa lỗi nâng cao & proofreading kỹ năng",
+    "Thuyết trình chuyên nghiệp & public speaking",
+    "Đàm phán, thương lượng & ngôn ngữ trang trọng",
+    "Phân tích văn học, truyền thông & phong cách tác giả",
+    "Phong cách viết đa dạng – Creative & analytical",
+    "Ôn tập toàn diện C1 & chuẩn bị tiến lên C2",
+  ],
+  C2: [
+    "Phân tích văn học & ngôn ngữ học nâng cao",
+    "Sắc thái ngôn ngữ, register & stylistic variation",
+    "Thành ngữ & cách diễn đạt ở mức bản ngữ",
+    "Viết học thuật & sáng tạo cấp độ cao nhất",
+  ],
+};
+
+// Keep ENGLISH_WEEK_THEMES as alias for CEFR (used by existing code paths & free practice)
+export const ENGLISH_WEEK_THEMES: Record<Level, string[]> = CEFR_WEEK_THEMES;
+
+// ─── Thai Week Themes ─────────────────────────────────────────────────────────
+
 export const THAI_WEEK_THEMES: Record<Level, string[]> = {
   A1: [
-    "ตัวอักษรไทย – พยัญชนะ",
+    "ตัวอักษรไทย – พยัญชนะ 44 ตัว",
     "ตัวอักษรไทย – สระและวรรณยุกต์",
     "คำทักทายและแนะนำตัว",
     "ตัวเลขและเวลา",
   ],
   A2: [
-    "คำกริยาพื้นฐาน",
+    "คำกริยาพื้นฐานในชีวิตประจำวัน",
     "อาหารและการสั่งอาหาร",
     "การนับและการซื้อของ",
     "ครอบครัวและคน",
@@ -201,45 +327,63 @@ export const THAI_WEEK_THEMES: Record<Level, string[]> = {
     "การนัดหมายและการประชุม",
     "สถานที่และทิศทาง",
     "สุขภาพและร่างกาย",
-    "วันหยุดและเทศกาล",
+    "วันหยุดและเทศกาลไทย",
     "คำลักษณนาม",
     "ประโยคซับซ้อน",
     "การอ่านป้ายและประกาศ",
   ],
   B2: [
     "คำศัพท์ธุรกิจขั้นสูง",
-    "การเจรจาต่อรอง",
-    "ข่าวและสื่อ",
-    "วัฒนธรรมและสังคมไทย",
-    "การเขียนอีเมลทางการ",
-    "สำนวนและสุภาษิต",
+    "การเจรจาต่อรองและการโน้มน้าว",
+    "ข่าวและสื่อภาษาไทย",
+    "วัฒนธรรมและสังคมไทยเชิงลึก",
+    "การเขียนอีเมลและจดหมายทางการ",
+    "สำนวนและสุภาษิตไทย",
     "ภาษาทางการและไม่เป็นทางการ",
     "การฟังภาษาไทยระดับกลาง",
     "ไวยากรณ์ขั้นสูง",
-    "การออกเสียงขั้นสูง",
+    "การออกเสียงขั้นสูง – วรรณยุกต์ซับซ้อน",
     "บทอ่านระดับกลาง",
     "การสนทนาในสถานการณ์จริง",
   ],
   C1: [
     "ภาษาระดับสูงในบริบทธุรกิจ",
-    "การพูดในที่สาธารณะ",
-    "วรรณกรรมไทย",
-    "สำนวนสุภาพระดับสูง",
-    "การเขียนเชิงวิชาการ",
+    "การพูดในที่สาธารณะเป็นภาษาไทย",
+    "วรรณกรรมไทยคัดสรร",
+    "สำนวนสุภาพและภาษาราชสำนัก",
+    "การเขียนเชิงวิชาการภาษาไทย",
     "ภาษาทางการในเอกสารราชการ",
     "การนำเสนอระดับมืออาชีพ",
-    "ทบทวนและประเมินผล",
+    "ทบทวนและประเมินผลรอบด้าน",
   ],
   C2: [
     "ความเชี่ยวชาญระดับเจ้าของภาษา",
-    "วรรณกรรมและบทกวี",
+    "วรรณกรรม บทกวี และสุนทรพจน์ไทย",
     "ภาษาระดับ register สูงสุด",
     "ทบทวนขั้นสุดท้าย",
   ],
 };
 
-/** Skills available per learning focus */
+// ─── Skill pools per exam ─────────────────────────────────────────────────────
+
+/**
+ * TOEIC: tests only Listening + Reading → no speaking, no writing sessions
+ * IELTS: tests all 4 skills → full pool
+ * general (CEFR): flexible, follows learningFocus preference
+ */
 export const FOCUS_SKILLS: Record<string, string[]> = {
+  comprehensive:  ["vocabulary", "grammar", "listening", "reading", "speaking", "writing", "review"],
+  conversational: ["vocabulary", "listening", "speaking", "review"],
+  academic:       ["vocabulary", "grammar", "reading", "writing", "review"],
+};
+
+export const TOEIC_SKILLS: Record<string, string[]> = {
+  comprehensive:  ["vocabulary", "grammar", "listening", "reading", "review"],
+  conversational: ["vocabulary", "listening", "review"],
+  academic:       ["vocabulary", "grammar", "reading", "review"],
+};
+
+export const IELTS_SKILLS: Record<string, string[]> = {
   comprehensive:  ["vocabulary", "grammar", "listening", "reading", "speaking", "writing", "review"],
   conversational: ["vocabulary", "listening", "speaking", "review"],
   academic:       ["vocabulary", "grammar", "reading", "writing", "review"],
@@ -269,9 +413,31 @@ export function generateWeeklyPlan(
   startDate: Date,
   busyDays: number[] = [],
   weeklyHours = 7,
-  learningFocus = "comprehensive"
+  learningFocus = "comprehensive",
+  targetExam = "general"
 ): WeekPlan[] {
-  const themes = language === "english" ? ENGLISH_WEEK_THEMES : THAI_WEEK_THEMES;
+  // Pick the right theme pool
+  let themes: Record<Level, string[]>;
+  if (language === "thai") {
+    themes = THAI_WEEK_THEMES;
+  } else if (targetExam === "TOEIC") {
+    themes = TOEIC_WEEK_THEMES;
+  } else if (targetExam === "IELTS") {
+    themes = IELTS_WEEK_THEMES;
+  } else {
+    themes = CEFR_WEEK_THEMES;
+  }
+
+  // Pick the right skill pool
+  let skillPool: Record<string, string[]>;
+  if (targetExam === "TOEIC") {
+    skillPool = TOEIC_SKILLS;
+  } else if (targetExam === "IELTS") {
+    skillPool = IELTS_SKILLS;
+  } else {
+    skillPool = FOCUS_SKILLS;
+  }
+
   const fromIdx = LEVEL_ORDER.indexOf(fromLevel);
   const toIdx = LEVEL_ORDER.indexOf(toLevel);
 
@@ -281,7 +447,7 @@ export function generateWeeklyPlan(
   }
 
   // Resolve skill pool for this focus
-  const focusSkills = FOCUS_SKILLS[learningFocus] ?? FOCUS_SKILLS.comprehensive;
+  const focusSkills = skillPool[learningFocus] ?? skillPool.comprehensive;
 
   // Lessons per week: allow multiple sessions per day for high-intensity
   const availableDaysPerWeek = Math.max(1, 7 - busyDays.length);

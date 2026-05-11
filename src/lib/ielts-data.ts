@@ -322,21 +322,359 @@ const BAND_8: IeltsQuestion[] = [
   },
 ];
 
+// ─── Band 4.0 Set B ───────────────────────────────────────────────────────────
+
+const PASSAGE_4B =
+  "Urban farming — growing food within city boundaries — has gained renewed interest as cities seek to improve food security and reduce carbon footprints. " +
+  "Rooftop gardens, vertical farms, and community allotments now produce significant quantities of vegetables and herbs in many major cities. " +
+  "Supporters argue that urban farms reduce transportation distances, lower carbon emissions, and reconnect city residents with food production. " +
+  "Critics point out, however, that urban land is expensive, and the energy needed for indoor vertical farming can sometimes exceed savings from reduced transport. " +
+  "Despite these concerns, many city governments continue to promote urban farming as part of wider sustainability strategies.";
+
+const BAND_4B: IeltsQuestion[] = [
+  {
+    id: "ielts-4b-1",
+    band: "4.0",
+    passage: PASSAGE_4B,
+    question: "Urban farming is a new concept that only recently emerged. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 2,
+  },
+  {
+    id: "ielts-4b-2",
+    band: "4.0",
+    passage: PASSAGE_4B,
+    question: "Urban farms can reduce the distance food travels from farm to consumer. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 0,
+  },
+  {
+    id: "ielts-4b-3",
+    band: "4.0",
+    passage: PASSAGE_4B,
+    question: "Critics are concerned that energy use in indoor farming may offset transportation savings. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 0,
+  },
+  {
+    id: "ielts-4b-4",
+    band: "4.0",
+    passage: PASSAGE_4B,
+    question: "According to the passage, what do supporters say urban farms help city residents do?",
+    options: [
+      "Earn extra income from selling produce",
+      "Reconnect with food production",
+      "Reduce their water consumption",
+      "Avoid supermarket price increases",
+    ],
+    answer: 1,
+  },
+  {
+    id: "ielts-4b-5",
+    band: "4.0",
+    passage: PASSAGE_4B,
+    question: "What is the main idea of this passage?",
+    options: [
+      "Urban farming is too expensive to be practical",
+      "Urban farming has both benefits and challenges but is supported by many cities",
+      "City governments should replace all parks with farms",
+      "Vertical farming is the only viable form of urban agriculture",
+    ],
+    answer: 1,
+  },
+];
+
+// ─── Band 5.0 Set B ───────────────────────────────────────────────────────────
+
+const PASSAGE_5B =
+  "The rise of the gig economy — characterised by short-term contracts and freelance work rather than permanent jobs — has transformed labour markets in many countries. " +
+  "Digital platforms such as ride-hailing apps and food delivery services have created millions of flexible work opportunities. " +
+  "Proponents argue that gig work offers unprecedented flexibility, allowing workers to set their own hours and pursue multiple income streams. " +
+  "However, critics highlight significant drawbacks: gig workers are typically classified as independent contractors, " +
+  "meaning they are ineligible for employee benefits such as paid leave, healthcare, and pension contributions. " +
+  "Several governments have begun legislating to extend labour protections to gig workers, " +
+  "though platform companies argue that doing so would fundamentally undermine the flexible model that workers themselves value.";
+
+const BAND_5B: IeltsQuestion[] = [
+  {
+    id: "ielts-5b-1",
+    band: "5.0",
+    passage: PASSAGE_5B,
+    question: "Gig workers typically receive the same employment benefits as permanent employees. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 1,
+  },
+  {
+    id: "ielts-5b-2",
+    band: "5.0",
+    passage: PASSAGE_5B,
+    question: "Platform companies support extending labour protections to gig workers. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 1,
+  },
+  {
+    id: "ielts-5b-3",
+    band: "5.0",
+    passage: PASSAGE_5B,
+    question: "Some governments have started taking legislative action regarding gig worker rights. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 0,
+  },
+  {
+    id: "ielts-5b-4",
+    band: "5.0",
+    passage: PASSAGE_5B,
+    question: "According to the passage, what do proponents say is a key advantage of gig work?",
+    options: [
+      "Higher hourly rates than traditional employment",
+      "Access to full healthcare and pension benefits",
+      "The ability to choose one's own working hours",
+      "Greater job security than permanent employment",
+    ],
+    answer: 2,
+  },
+  {
+    id: "ielts-5b-5",
+    band: "5.0",
+    passage: PASSAGE_5B,
+    question: "In this context, 'independent contractors' most closely refers to:",
+    options: [
+      "Workers who are self-employed and not entitled to employee benefits",
+      "Company employees with full-time permanent contracts",
+      "Government-registered construction workers",
+      "Platform company executives",
+    ],
+    answer: 0,
+  },
+];
+
+// ─── Band 6.0 Set B ───────────────────────────────────────────────────────────
+
+const PASSAGE_6B =
+  "The concept of 'deep work', popularised by computer science professor Cal Newport, refers to the ability to perform cognitively demanding tasks " +
+  "in a state of distraction-free concentration that pushes one's cognitive capabilities to their limits. " +
+  "Newport argues that deep work is becoming increasingly valuable in the modern knowledge economy, " +
+  "precisely because it is becoming increasingly rare as digital communication tools fragment attention. " +
+  "He contends that the capacity to learn complicated things quickly and produce at an elite level " +
+  "depends fundamentally on one's ability to engage in prolonged, uninterrupted focus. " +
+  "Shallow work — tasks that are logistical, easily replicable, and performed while distracted — " +
+  "generates little lasting value and is being increasingly automated. " +
+  "Newport's framework implies that cultivating deep work habits constitutes a critical professional advantage in a distracted age.";
+
+const BAND_6B: IeltsQuestion[] = [
+  {
+    id: "ielts-6b-1",
+    band: "6.0",
+    passage: PASSAGE_6B,
+    question: "Newport argues that deep work is becoming more common in modern workplaces. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 1,
+  },
+  {
+    id: "ielts-6b-2",
+    band: "6.0",
+    passage: PASSAGE_6B,
+    question: "Shallow work is described as easily replaceable by automation. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 0,
+  },
+  {
+    id: "ielts-6b-3",
+    band: "6.0",
+    passage: PASSAGE_6B,
+    question: "Newport suggests that digital tools are neutral in their effect on deep work capacity. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 1,
+  },
+  {
+    id: "ielts-6b-4",
+    band: "6.0",
+    passage: PASSAGE_6B,
+    question: "According to Newport, what are the two main hallmarks of deep work?",
+    options: [
+      "Speed and multitasking ability",
+      "Distraction-free focus and cognitive stretch",
+      "Use of advanced digital tools and teamwork",
+      "Consistent output and meeting deadlines",
+    ],
+    answer: 1,
+  },
+  {
+    id: "ielts-6b-5",
+    band: "6.0",
+    passage: PASSAGE_6B,
+    question: "In this passage, 'fragment attention' most closely means:",
+    options: [
+      "strengthen concentration",
+      "split focus across multiple stimuli",
+      "permanently damage cognitive function",
+      "increase productivity through multitasking",
+    ],
+    answer: 1,
+  },
+];
+
+// ─── Band 7.0 Set B ───────────────────────────────────────────────────────────
+
+const PASSAGE_7B =
+  "The concept of 'moral luck', introduced into philosophical discourse by Thomas Nagel and Bernard Williams, " +
+  "challenges the intuition that moral judgement should be based solely on factors within an agent's control. " +
+  "Nagel identifies several forms of moral luck: resultant luck — where the outcome of an action affects moral assessment despite identical intentions — " +
+  "and circumstantial luck — where the situations in which people find themselves determine the moral choices they face. " +
+  "A reckless driver who happens to injure a pedestrian is judged more harshly than one who, by chance, causes no harm, " +
+  "despite the identical degree of negligence in both cases. " +
+  "This asymmetry troubles moral philosophers because it implies that our deepest attributions of blame and praise " +
+  "are partly governed by factors entirely beyond the agent's control, " +
+  "raising profound questions about the foundations of moral responsibility and retributive justice.";
+
+const BAND_7B: IeltsQuestion[] = [
+  {
+    id: "ielts-7b-1",
+    band: "7.0",
+    passage: PASSAGE_7B,
+    question: "Nagel and Williams introduced the concept of moral luck to support traditional moral frameworks. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 1,
+  },
+  {
+    id: "ielts-7b-2",
+    band: "7.0",
+    passage: PASSAGE_7B,
+    question: "Circumstantial luck refers to the outcomes that result from a person's actions. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 1,
+  },
+  {
+    id: "ielts-7b-3",
+    band: "7.0",
+    passage: PASSAGE_7B,
+    question: "According to the passage, why does the reckless driver example trouble philosophers?",
+    options: [
+      "Because it shows that all drivers are equally negligent",
+      "Because it demonstrates that intent is irrelevant in legal systems",
+      "Because identical negligence leads to different moral judgements based on chance",
+      "Because pedestrians bear responsibility for their own safety",
+    ],
+    answer: 2,
+  },
+  {
+    id: "ielts-7b-4",
+    band: "7.0",
+    passage: PASSAGE_7B,
+    question: "What broader issue does the concept of moral luck raise?",
+    options: [
+      "Whether legal and moral responsibility should always align",
+      "Whether moral blame can be fairly assigned when outcomes depend partly on chance",
+      "Whether philosophers should focus on outcomes rather than intentions",
+      "Whether reckless behaviour should be criminalised more severely",
+    ],
+    answer: 1,
+  },
+  {
+    id: "ielts-7b-5",
+    band: "7.0",
+    passage: PASSAGE_7B,
+    question: "The phrase 'asymmetry' in this passage refers to:",
+    options: [
+      "the difference between moral and legal philosophy",
+      "the unequal treatment of identical behaviour based on accidental outcomes",
+      "the conflict between Nagel and Williams's philosophical positions",
+      "the gap between academic ethics and everyday moral intuitions",
+    ],
+    answer: 1,
+  },
+];
+
+// ─── Band 8.0 Set B ───────────────────────────────────────────────────────────
+
+const PASSAGE_8B =
+  "The emergence of large language models (LLMs) as general-purpose reasoning tools has reignited longstanding debates " +
+  "in cognitive science and philosophy of mind about the nature of understanding and intentionality. " +
+  "Critics drawing on Searle's Chinese Room argument contend that LLMs, however fluently they manipulate symbols, " +
+  "remain fundamentally syntactic engines: they process form without content, producing outputs that simulate comprehension " +
+  "while remaining entirely devoid of semantic grounding or genuine intentionality. " +
+  "Defenders counter that this objection proves too much — if LLMs lack understanding, " +
+  "the same formal argument might be deployed to deny understanding to human neural systems, " +
+  "which are equally describable as electrochemical signal-processing mechanisms. " +
+  "The deeper question may not be whether LLMs 'truly' understand, but whether the concept of understanding itself " +
+  "requires revision in light of entities whose competence substantially exceeds any functionalist operational definition.";
+
+const BAND_8B: IeltsQuestion[] = [
+  {
+    id: "ielts-8b-1",
+    band: "8.0",
+    passage: PASSAGE_8B,
+    question: "Searle's Chinese Room argument is used in the passage to support LLMs' capacity for genuine understanding. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 1,
+  },
+  {
+    id: "ielts-8b-2",
+    band: "8.0",
+    passage: PASSAGE_8B,
+    question: "The passage suggests that LLMs can process form without possessing semantic content. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 0,
+  },
+  {
+    id: "ielts-8b-3",
+    band: "8.0",
+    passage: PASSAGE_8B,
+    question: "Defenders of LLMs argue that the objection based on syntax also undermines claims about human understanding. (True / False / Not Given)",
+    options: ["True", "False", "Not Given"],
+    answer: 0,
+  },
+  {
+    id: "ielts-8b-4",
+    band: "8.0",
+    passage: PASSAGE_8B,
+    question: "What does the author suggest the 'deeper question' about LLMs actually concerns?",
+    options: [
+      "Whether LLMs will eventually surpass human intelligence",
+      "Whether the concept of understanding itself needs to be rethought",
+      "Whether Chinese Room arguments are logically valid",
+      "Whether LLMs should be granted legal personhood",
+    ],
+    answer: 1,
+  },
+  {
+    id: "ielts-8b-5",
+    band: "8.0",
+    passage: PASSAGE_8B,
+    question: "In this context, 'intentionality' most nearly refers to:",
+    options: [
+      "deliberate planning and decision-making",
+      "the property of mental states being directed at or about something",
+      "the ability to generate syntactically correct sentences",
+      "awareness of one's own cognitive limitations",
+    ],
+    answer: 1,
+  },
+];
+
 // ─── Combined ─────────────────────────────────────────────────────────────────
 
 export const IELTS_QUESTIONS: IeltsQuestion[] = [
-  ...BAND_4,
-  ...BAND_5,
-  ...BAND_6,
-  ...BAND_7,
-  ...BAND_8,
+  ...BAND_4, ...BAND_4B,
+  ...BAND_5, ...BAND_5B,
+  ...BAND_6, ...BAND_6B,
+  ...BAND_7, ...BAND_7B,
+  ...BAND_8, ...BAND_8B,
 ];
 
 const BAND_ORDER = ["4.0", "5.0", "6.0", "7.0", "8.0"] as const;
 
+// Randomly pick one of the two passage sets per band — guarantees different questions each test
 export function getIeltsQuestions(): IeltsQuestion[] {
-  // Questions served in band order (difficulty progression)
-  return [...IELTS_QUESTIONS];
+  const pick = (a: IeltsQuestion[], b: IeltsQuestion[]) =>
+    Math.random() < 0.5 ? [...a] : [...b];
+  return [
+    ...pick(BAND_4, BAND_4B),
+    ...pick(BAND_5, BAND_5B),
+    ...pick(BAND_6, BAND_6B),
+    ...pick(BAND_7, BAND_7B),
+    ...pick(BAND_8, BAND_8B),
+  ];
 }
 
 export type IeltsResult = {

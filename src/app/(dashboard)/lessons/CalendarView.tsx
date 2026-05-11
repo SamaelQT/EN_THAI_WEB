@@ -38,11 +38,12 @@ export type LessonDay = {
   roadmapId: string;
   currentLevel: string;
   busyDays: number[];
+  examType?: string;
 };
 
 type Props = {
   lessonDays: LessonDay[];
-  onStartLesson?: (type: string, lang: string, level: string, dayId: string) => void;
+  onStartLesson?: (type: string, lang: string, level: string, dayId: string, examType?: string) => void;
 };
 
 export default function CalendarView({ lessonDays, onStartLesson }: Props) {
@@ -341,7 +342,7 @@ export default function CalendarView({ lessonDays, onStartLesson }: Props) {
                           className="w-full h-7 text-xs"
                           onClick={() =>
                             onStartLesson
-                              ? onStartLesson(lesson.lessonType, lesson.language, lesson.currentLevel, lesson.id)
+                              ? onStartLesson(lesson.lessonType, lesson.language, lesson.currentLevel, lesson.id, lesson.examType)
                               : router.push(
                                   `/lessons/learn?type=${lesson.lessonType}&lang=${lesson.language}&level=${lesson.currentLevel}&dayId=${lesson.id}`
                                 )

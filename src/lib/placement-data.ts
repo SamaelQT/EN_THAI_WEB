@@ -593,6 +593,359 @@ export const THAI_QUESTIONS: Question[] = [
   },
 ];
 
+// ── Additional Thai Questions (Set B – for randomization) ────────────────────
+
+export const THAI_QUESTIONS_B: Question[] = [
+  // ── A1 extra ──────────────────────────────────────────────────────────────
+  {
+    id: "th-v-a1-4",
+    section: "vocabulary",
+    level: "A1",
+    question: "คำว่า 'บ้าน' (bâan) หมายถึงอะไร?",
+    options: ["School", "Hospital", "House / Home", "Office"],
+    answer: 2,
+  },
+  {
+    id: "th-v-a1-5",
+    section: "vocabulary",
+    level: "A1",
+    question: "คำว่า 'ไป' (pai) หมายถึง?",
+    options: ["to come", "to go", "to stay", "to eat"],
+    answer: 1,
+  },
+  {
+    id: "th-g-a1-3",
+    section: "grammar",
+    level: "A1",
+    question: "คำลงท้ายสุภาพสำหรับผู้ชายในภาษาไทยคือ?",
+    options: ["ค่ะ (khâ)", "ครับ (khráp)", "นะ (ná)", "จ้า (jâa)"],
+    answer: 1,
+  },
+  {
+    id: "th-v-a1-6",
+    section: "vocabulary",
+    level: "A1",
+    question: "คำว่า 'อาหาร' (aa-hǎan) หมายถึง?",
+    options: ["Water", "Food", "Drink", "Fruit"],
+    answer: 1,
+  },
+  // ── A2 extra ──────────────────────────────────────────────────────────────
+  {
+    id: "th-v-a2-3",
+    section: "vocabulary",
+    level: "A2",
+    question: "คำว่า 'ถูก' (thùuk) ในบริบท 'ราคาถูก' หมายถึง?",
+    options: ["Expensive", "Cheap", "Correct", "Beautiful"],
+    answer: 1,
+  },
+  {
+    id: "th-v-a2-4",
+    section: "vocabulary",
+    level: "A2",
+    question: "คำว่า 'ไกล' (klai) หมายถึง?",
+    options: ["Near", "Far", "Here", "There"],
+    answer: 1,
+  },
+  {
+    id: "th-g-a2-3",
+    section: "grammar",
+    level: "A2",
+    question: "คำว่า 'ไม่' (mâi) ในภาษาไทยใช้เพื่อ?",
+    options: ["แสดงคำถาม", "ปฏิเสธกริยา", "แสดงอนาคต", "เน้นคำ"],
+    answer: 1,
+  },
+  {
+    id: "th-g-a2-4",
+    section: "grammar",
+    level: "A2",
+    question: "คำถามที่ใช้ถามเกี่ยวกับ 'บุคคล' ในภาษาไทยคือ?",
+    options: ["อะไร (a-rai)", "ที่ไหน (thîi-nǎi)", "ใคร (khrai)", "เมื่อไร (mûuea-rai)"],
+    answer: 2,
+  },
+  {
+    id: "th-v-a2-5",
+    section: "vocabulary",
+    level: "A2",
+    question: "คำว่า 'ง่าย' (ngâai) หมายถึง?",
+    options: ["Difficult", "Expensive", "Easy", "Beautiful"],
+    answer: 2,
+  },
+  {
+    id: "th-g-a2-5",
+    section: "grammar",
+    level: "A2",
+    question: "คำลักษณนามสำหรับสัตว์ในภาษาไทยคือ?",
+    options: ["เล่ม (lêm)", "ตัว (tua)", "ใบ (bai)", "อัน (an)"],
+    answer: 1,
+  },
+  // ── B1 extra ──────────────────────────────────────────────────────────────
+  {
+    id: "th-v-b1-5",
+    section: "vocabulary",
+    level: "B1",
+    question: "คำว่า 'สำคัญ' (sǎm-khan) หมายถึง?",
+    options: ["Boring", "Important", "Difficult", "Strange"],
+    answer: 1,
+  },
+  {
+    id: "th-g-b1-4",
+    section: "grammar",
+    level: "B1",
+    question: "คำว่า 'จะ' (jà) ในภาษาไทยใช้เพื่อแสดง?",
+    options: ["อดีต", "ปัจจุบัน", "อนาคต", "ความเคย"],
+    answer: 2,
+  },
+  {
+    id: "th-v-b1-6",
+    section: "vocabulary",
+    level: "B1",
+    question: "คำว่า 'ตัดสินใจ' (tàt-sǐn-jai) หมายถึง?",
+    options: ["To think", "To decide", "To remember", "To explain"],
+    answer: 1,
+  },
+  // ── B2 extra ──────────────────────────────────────────────────────────────
+  {
+    id: "th-v-b2-4",
+    section: "vocabulary",
+    level: "B2",
+    question: "คำว่า 'ประสิทธิภาพ' (prà-sìt-thí-phâap) หมายถึง?",
+    options: ["Problem", "Efficiency", "Responsibility", "Experience"],
+    answer: 1,
+  },
+  {
+    id: "th-g-b2-3",
+    section: "grammar",
+    level: "B2",
+    question: "สำนวน 'ได้รับผลกระทบ' (dâai-ráp-phǒn-krà-thop) หมายถึง?",
+    options: ["To receive a reward", "To be affected / impacted", "To make a decision", "To take responsibility"],
+    answer: 1,
+  },
+  // ── C1 extra ──────────────────────────────────────────────────────────────
+  {
+    id: "th-v-c1-3",
+    section: "vocabulary",
+    level: "C1",
+    question: "คำว่า 'เชิงนโยบาย' (choeng-ná-yoo-bai) หมายถึง?",
+    options: ["At an emotional level", "At a policy / strategic level", "At a personal level", "At a technical level"],
+    answer: 1,
+  },
+  {
+    id: "th-r-c1-3",
+    section: "reading",
+    level: "C1",
+    question:
+      "อ่าน: 'การลงทุนในทรัพยากรมนุษย์ถือเป็นรากฐานสำคัญของการพัฒนาที่ยั่งยืน' ประโยคนี้เน้นความสำคัญของ?",
+    options: [
+      "การลงทุนทางการเงิน",
+      "การพัฒนาคนและทักษะ",
+      "การพัฒนาโครงสร้างพื้นฐาน",
+      "การเติบโตทางเศรษฐกิจระยะสั้น",
+    ],
+    answer: 1,
+  },
+];
+
+// ── Additional English Questions (Set B – for randomization) ──────────────────
+
+export const ENGLISH_QUESTIONS_B: Question[] = [
+  // ── A1 extra ──────────────────────────────────────────────────────────────
+  {
+    id: "en-v-a1-4",
+    section: "vocabulary",
+    level: "A1",
+    question: "Which word describes the weather when it is raining?",
+    options: ["sunny", "windy", "rainy", "cloudy"],
+    answer: 2,
+  },
+  {
+    id: "en-g-a1-4",
+    section: "grammar",
+    level: "A1",
+    question: "Complete: '_____ you like coffee or tea?'",
+    options: ["Are", "Do", "Does", "Is"],
+    answer: 1,
+  },
+  {
+    id: "en-v-a1-5",
+    section: "vocabulary",
+    level: "A1",
+    question: "What does 'big' mean?",
+    options: ["small", "fast", "large", "hot"],
+    answer: 2,
+  },
+  {
+    id: "en-g-a1-5",
+    section: "grammar",
+    level: "A1",
+    question: "Choose the correct sentence:",
+    options: [
+      "They is happy.",
+      "They are happy.",
+      "They am happy.",
+      "They be happy.",
+    ],
+    answer: 1,
+  },
+  // ── A2 extra ──────────────────────────────────────────────────────────────
+  {
+    id: "en-v-a2-4",
+    section: "vocabulary",
+    level: "A2",
+    question: "What does 'ancient' mean?",
+    options: ["very new", "very old", "very fast", "very large"],
+    answer: 1,
+  },
+  {
+    id: "en-g-a2-4",
+    section: "grammar",
+    level: "A2",
+    question: "'She has been waiting _____ two hours.' Choose the correct preposition:",
+    options: ["since", "for", "during", "while"],
+    answer: 1,
+  },
+  {
+    id: "en-v-a2-5",
+    section: "vocabulary",
+    level: "A2",
+    question: "Which word means to get on well with someone?",
+    options: ["argue with", "get along with", "disagree with", "compete with"],
+    answer: 1,
+  },
+  {
+    id: "en-g-a2-5",
+    section: "grammar",
+    level: "A2",
+    question: "Choose the correct sentence:",
+    options: [
+      "I am agree with you.",
+      "I agrees with you.",
+      "I agree with you.",
+      "I agreeing with you.",
+    ],
+    answer: 2,
+  },
+  // ── B1 extra ──────────────────────────────────────────────────────────────
+  {
+    id: "en-v-b1-4",
+    section: "vocabulary",
+    level: "B1",
+    question: "'Approximately' is closest in meaning to:",
+    options: ["exactly", "never", "roughly", "barely"],
+    answer: 2,
+  },
+  {
+    id: "en-g-b1-4",
+    section: "grammar",
+    level: "B1",
+    question: "Complete: 'The package _____ by courier tomorrow morning.'",
+    options: ["delivers", "is delivering", "will be delivered", "has delivered"],
+    answer: 2,
+  },
+  {
+    id: "en-v-b1-5",
+    section: "vocabulary",
+    level: "B1",
+    question: "What does 'innovative' mean?",
+    options: [
+      "introducing new ideas or methods",
+      "following traditional approaches",
+      "copying from competitors",
+      "reducing costs",
+    ],
+    answer: 0,
+  },
+  {
+    id: "en-g-b1-5",
+    section: "grammar",
+    level: "B1",
+    question: "Choose the correct sentence:",
+    options: [
+      "Neither of the options are correct.",
+      "Neither of the options is correct.",
+      "Neither of the options were correct.",
+      "Neither of the options have been correct.",
+    ],
+    answer: 1,
+  },
+  // ── B2 extra ──────────────────────────────────────────────────────────────
+  {
+    id: "en-v-b2-4",
+    section: "vocabulary",
+    level: "B2",
+    question: "The word 'substantiate' means to:",
+    options: ["deny a claim", "provide evidence to support", "reduce in size", "delay a decision"],
+    answer: 1,
+  },
+  {
+    id: "en-g-b2-3",
+    section: "grammar",
+    level: "B2",
+    question: "Complete: 'Had the team prepared more thoroughly, they _____ the competition.'",
+    options: [
+      "would win",
+      "would have won",
+      "will have won",
+      "had won",
+    ],
+    answer: 1,
+  },
+  {
+    id: "en-r-b2-2",
+    section: "reading",
+    level: "B2",
+    question:
+      "Read: 'Technological unemployment — job losses caused by automation — is a recurring concern in economic history, yet each wave of innovation has historically generated new categories of employment.' What is the author's implied position?",
+    options: [
+      "Automation will eliminate all jobs permanently",
+      "Historical patterns suggest automation may create as many jobs as it destroys",
+      "Workers should resist new technologies",
+      "Governments must ban automation to protect employment",
+    ],
+    answer: 1,
+  },
+  // ── C1 extra ──────────────────────────────────────────────────────────────
+  {
+    id: "en-v-c1-3",
+    section: "vocabulary",
+    level: "C1",
+    question: "'Perfunctory' describes something done:",
+    options: [
+      "with great care and attention",
+      "with minimal effort as a matter of routine",
+      "in an illegal or deceptive way",
+      "in a highly emotional manner",
+    ],
+    answer: 1,
+  },
+  {
+    id: "en-g-c1-3",
+    section: "grammar",
+    level: "C1",
+    question: "Which sentence uses a participle clause correctly?",
+    options: [
+      "Walking to the office, the rain started.",
+      "Having submitted the report, the manager praised her work.",
+      "To finishing the project, extra staff were hired.",
+      "Being late, the meeting had already began.",
+    ],
+    answer: 1,
+  },
+  {
+    id: "en-r-c1-2",
+    section: "reading",
+    level: "C1",
+    question:
+      "Read: 'Confirmation bias — the tendency to search for and favour information that confirms existing beliefs — is not merely a cognitive flaw but an adaptive mechanism that allowed early humans to act quickly on limited information.' What does the author imply?",
+    options: [
+      "Confirmation bias is entirely beneficial and should be cultivated",
+      "Confirmation bias has evolutionary origins that help explain its persistence",
+      "Early humans had better cognitive abilities than modern people",
+      "Quick decision-making is always superior to careful analysis",
+    ],
+    answer: 1,
+  },
+];
+
 export type Level = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 
 const LEVEL_ORDER: Level[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
@@ -616,13 +969,16 @@ function fisherYatesShuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// 4 câu mỗi level, random trong từng level, sau đó shuffle tổng
+// 4 câu mỗi level, random trong từng level từ pool mở rộng, sau đó shuffle tổng
 export function getQuestionsForTest(language: "english" | "thai"): Question[] {
-  const pool = language === "english" ? ENGLISH_QUESTIONS : THAI_QUESTIONS;
+  const basePool = language === "english" ? ENGLISH_QUESTIONS : THAI_QUESTIONS;
+  const extraPool = language === "english" ? ENGLISH_QUESTIONS_B : THAI_QUESTIONS_B;
+  const combinedPool = [...basePool, ...extraPool];
+
   const levels: Level[] = ["A1", "A2", "B1", "B2", "C1"];
   const selected: Question[] = [];
   for (const level of levels) {
-    const levelPool = pool.filter((q) => q.level === level);
+    const levelPool = combinedPool.filter((q) => q.level === level);
     selected.push(...fisherYatesShuffle(levelPool).slice(0, 4));
   }
   return fisherYatesShuffle(selected);

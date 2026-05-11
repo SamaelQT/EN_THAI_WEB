@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, PlayCircle, BookOpen, Volume2, Mic, Square } from "lucide-react";
 import CalendarView, { type LessonDay } from "./CalendarView";
-import { ENGLISH_WEEK_THEMES, THAI_WEEK_THEMES, type Level } from "@/lib/roadmap-generator";
+import { CEFR_WEEK_THEMES, TOEIC_WEEK_THEMES, IELTS_WEEK_THEMES, THAI_WEEK_THEMES, type Level } from "@/lib/roadmap-generator";
 
 // Built-in lesson content for the MVP (expandable via AI later)
 const LESSON_CONTENT: Record<string, any> = {
@@ -101,7 +101,7 @@ function ScoreBadge({ score }: { score: number }) {
 
 // ── Types ─────────────────────────────────────────────────────
 
-type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number };
+type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number; targetExam?: string };
 
 type Props = {
   enRoadmap: Roadmap | null;
@@ -315,8 +315,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
 
   // ── Lesson flow ───────────────────────────────────────────────
 
-  async function openLesson(type: string, language: string, level: string, dayId?: string, topic?: string) {
-    const key = topic ? `${type}_${language}_${level}_${topic}` : `${type}_${language}_${level}`;
+  async function openLesson(type: string, language: string, level: string, dayId?: string, topic?: string, examType?: string) {
+    const examSuffix = examType && examType !== "general" ? `_${examType.toLowerCase()}` : "";
+    const key = topic ? `${type}_${language}_${level}_${topic}${examSuffix}` : `${type}_${language}_${level}`;
     const cached = LESSON_CONTENT[key];
     setActiveDayId(dayId ?? null);
     // reset speech state
@@ -346,7 +347,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
       const res = await fetch("/api/lessons/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonType: type, language, level, topic }),
+        body: JSON.stringify({ lessonType: type, language, level, topic, examType }),
       });
       const data = await res.json();
       if (data.error) {
@@ -477,18 +478,35 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
 
         {/* Tab bar — only show TOEIC/IELTS for English */}
         {lang === "english" && (
-          <div className="flex gap-1 p-1 bg-muted rounded-lg">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => { setBrowseTab(t.id); setBrowseLevel(""); setBrowseTopic(null); }}
-                className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  browseTab === t.id ? "bg-background shadow-sm" : "hover:bg-background/50"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
+          <div className="space-y-2">
+            <div className="flex gap-1 p-1 bg-muted rounded-lg">
+              {tabs.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => { setBrowseTab(t.id); setBrowseLevel(""); setBrowseTopic(null); }}
+                  className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    browseTab === t.id ? "bg-background shadow-sm" : "hover:bg-background/50"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            {browseTab === "toeic" && (
+              <p className="text-xs text-muted-foreground px-1">
+                🎯 Lộ trình TOEIC: Listening (Part 1-4) + Reading (Part 5-7) — không có Speaking/Writing
+              </p>
+            )}
+            {browseTab === "ielts" && (
+              <p className="text-xs text-muted-foreground px-1">
+                🎯 Lộ trình IELTS: Listening + Reading + Writing (Task 1 & 2) + Speaking (Part 1-3)
+              </p>
+            )}
+            {browseTab === "cefr" && (
+              <p className="text-xs text-muted-foreground px-1">
+                🎯 CEFR tổng quát: Giao tiếp toàn diện, không gắn với kỳ thi cụ thể
+              </p>
+            )}
           </div>
         )}
 
@@ -595,9 +613,16 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
 
         {/* Topic list — cho các bài học thông thường */}
         {selectedCefr && browseType.type !== "conversation" && (() => {
-          const themes = lang === "english"
-            ? ENGLISH_WEEK_THEMES[selectedCefr as Level] ?? []
-            : THAI_WEEK_THEMES[selectedCefr as Level] ?? [];
+          let themes: string[];
+          if (lang === "thai") {
+            themes = THAI_WEEK_THEMES[selectedCefr as Level] ?? [];
+          } else if (browseTab === "toeic") {
+            themes = TOEIC_WEEK_THEMES[selectedCefr as Level] ?? [];
+          } else if (browseTab === "ielts") {
+            themes = IELTS_WEEK_THEMES[selectedCefr as Level] ?? [];
+          } else {
+            themes = CEFR_WEEK_THEMES[selectedCefr as Level] ?? [];
+          }
           return (
             <div className="space-y-3">
               <p className="text-sm font-medium text-muted-foreground">Chọn chủ đề</p>
@@ -625,13 +650,16 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
           size="lg"
           disabled={!selectedCefr || !browseTopic}
           onClick={() => {
+            const examType = lang === "english"
+              ? (browseTab === "toeic" ? "TOEIC" : browseTab === "ielts" ? "IELTS" : "general")
+              : "general";
             if (browseType.type === "conversation") {
               setConvScenario(browseTopic!);
               setConvLevel(selectedCefr);
               setConvMessages([]);
               setLessonState("conversation");
             } else {
-              openLesson(browseType.type, lang, selectedCefr, undefined, browseTopic ?? undefined);
+              openLesson(browseType.type, lang, selectedCefr, undefined, browseTopic ?? undefined, examType);
             }
           }}
         >
@@ -1241,7 +1269,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
       {hasAnyRoadmap ? (
         <CalendarView
           lessonDays={lessonDays}
-          onStartLesson={(type, language, level, dayId) => openLesson(type, language, level, dayId)}
+          onStartLesson={(type, language, level, dayId, examType) => openLesson(type, language, level, dayId, undefined, examType)}
         />
       ) : (
         <Card>
@@ -1270,9 +1298,13 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
               key={lt.type}
               className="cursor-pointer transition-shadow hover:shadow-md"
               onClick={() => {
+                const activeRoadmap = lang === "english" ? enRoadmap : thRoadmap;
+                const exam = activeRoadmap?.targetExam ?? "general";
+                const defaultTab: "cefr" | "toeic" | "ielts" =
+                  exam === "TOEIC" ? "toeic" : exam === "IELTS" ? "ielts" : "cefr";
                 setBrowseType(lt);
                 setBrowseLevel(currentLevel || "B1");
-                setBrowseTab("cefr");
+                setBrowseTab(defaultTab);
                 setBrowseTopic(null);
                 setLessonState("browse");
               }}

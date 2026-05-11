@@ -232,14 +232,230 @@ const LEVEL_5: CutflQuestion[] = [
   },
 ];
 
+// ─── Level 1 Set B ────────────────────────────────────────────────────────────
+
+const LEVEL_1B: CutflQuestion[] = [
+  {
+    id: "cutfl-1-5",
+    level: 1,
+    section: "vocabulary",
+    question: "คำว่า 'บ้าน' (bâan) หมายถึง?",
+    options: ["School", "Hospital", "House / Home", "Market"],
+    answer: 2,
+  },
+  {
+    id: "cutfl-1-6",
+    level: 1,
+    section: "vocabulary",
+    question: "คำว่า 'น้องสาว' (nÔÔng-sǎaw) หมายถึง?",
+    options: ["Older sister", "Younger sister", "Mother", "Aunt"],
+    answer: 1,
+  },
+  {
+    id: "cutfl-1-7",
+    level: 1,
+    section: "grammar",
+    question: "ในภาษาไทย ประโยค 'ฉันชอบกินข้าว' มีโครงสร้างแบบใด?",
+    options: [
+      "Subject + Object + Verb",
+      "Subject + Verb + Object",
+      "Verb + Subject + Object",
+      "Object + Verb + Subject",
+    ],
+    answer: 1,
+  },
+  {
+    id: "cutfl-1-8",
+    level: 1,
+    section: "function",
+    question: "คุณจะพูดว่าอะไรเมื่อต้องการพูดว่า 'Excuse me'?",
+    options: ["ขอโทษครับ/ค่ะ (khɔ̌ɔ-thôot)", "ไม่เป็นไร (mâi-pen-rai)", "สวัสดี (sà-wàt-dee)", "ขอบคุณ (khɔ̀ɔp-khun)"],
+    answer: 0,
+  },
+];
+
+// ─── Level 2 Set B ────────────────────────────────────────────────────────────
+
+const LEVEL_2B: CutflQuestion[] = [
+  {
+    id: "cutfl-2-5",
+    level: 2,
+    section: "vocabulary",
+    question: "คำว่า 'ตลาด' (tà-làat) หมายถึง?",
+    options: ["Restaurant", "Market", "Hospital", "Hotel"],
+    answer: 1,
+  },
+  {
+    id: "cutfl-2-6",
+    level: 2,
+    section: "grammar",
+    question: "ในภาษาไทย คำว่า 'ไม่' (mâi) ใช้เพื่อ?",
+    options: ["แสดงคำถาม", "แสดงความเป็นเจ้าของ", "แสดงการปฏิเสธ", "แสดงการเปรียบเทียบ"],
+    answer: 2,
+  },
+  {
+    id: "cutfl-2-7",
+    level: 2,
+    section: "vocabulary",
+    question: "คำว่า 'หิว' (hǐu) หมายถึง?",
+    options: ["Thirsty", "Tired", "Hungry", "Hot"],
+    answer: 2,
+  },
+  {
+    id: "cutfl-2-8",
+    level: 2,
+    section: "function",
+    question: "คุณจะตอบอย่างไรเมื่อมีคนถามว่า 'สบายดีไหม' (sà-baai-dee-mǎi)?",
+    options: ["ฉันหิวมาก", "สบายดีครับ (sà-baai dee khráp)", "ขอบคุณมาก", "ยินดีต้อนรับ"],
+    answer: 1,
+  },
+];
+
+// ─── Level 3 Set B ────────────────────────────────────────────────────────────
+
+const LEVEL_3B: CutflQuestion[] = [
+  {
+    id: "cutfl-3-5",
+    level: 3,
+    section: "vocabulary",
+    question: "คำว่า 'อนุญาต' (à-nú-yâat) หมายถึง?",
+    options: ["To forbid", "To permit / allow", "To request", "To explain"],
+    answer: 1,
+  },
+  {
+    id: "cutfl-3-6",
+    level: 3,
+    section: "grammar",
+    question: "ประโยค 'ถ้าฝนตก ฉันจะอยู่บ้าน' เป็นประโยคประเภทใด?",
+    options: ["ประโยคบอกเล่า", "ประโยคแสดงเงื่อนไข", "ประโยคคำถาม", "ประโยคปฏิเสธ"],
+    answer: 1,
+  },
+  {
+    id: "cutfl-3-7",
+    level: 3,
+    section: "vocabulary",
+    question: "คำว่า 'ยืม' (yʉʉm) และ 'ให้ยืม' ต่างกันอย่างไร?",
+    options: [
+      "ยืม = to lend, ให้ยืม = to borrow",
+      "ยืม = to borrow, ให้ยืม = to lend",
+      "ทั้งสองคำมีความหมายเหมือนกัน",
+      "ยืม = to buy, ให้ยืม = to sell",
+    ],
+    answer: 1,
+  },
+  {
+    id: "cutfl-3-8",
+    level: 3,
+    section: "reading",
+    question: "อ่าน: 'ร้านยาเปิดทุกวันยกเว้นวันอาทิตย์' ร้านยาเปิดกี่วันต่อสัปดาห์?",
+    options: ["5 วัน", "6 วัน", "7 วัน", "4 วัน"],
+    answer: 1,
+  },
+];
+
+// ─── Level 4 Set B ────────────────────────────────────────────────────────────
+
+const LEVEL_4B: CutflQuestion[] = [
+  {
+    id: "cutfl-4-5",
+    level: 4,
+    section: "vocabulary",
+    question: "คำว่า 'ประมวลผล' (prà-muan-phǒn) มีความหมายว่า?",
+    options: ["To summarise", "To process / compile results", "To translate", "To distribute"],
+    answer: 1,
+  },
+  {
+    id: "cutfl-4-6",
+    level: 4,
+    section: "grammar",
+    question: "คำราชาศัพท์ 'ประทับ' ใช้แทนคำว่า?",
+    options: ["นั่ง (to sit)", "นอน (to sleep)", "กิน (to eat)", "เดิน (to walk)"],
+    answer: 0,
+  },
+  {
+    id: "cutfl-4-7",
+    level: 4,
+    section: "vocabulary",
+    question: "คำว่า 'โปร่งใส' (prôong-sǎi) ในบริบทการบริหารงานหมายถึง?",
+    options: ["Colourless", "Transparent / accountable", "Efficient", "Modern"],
+    answer: 1,
+  },
+  {
+    id: "cutfl-4-8",
+    level: 4,
+    section: "reading",
+    question: "อ่าน: 'ที่ประชุมมีมติเป็นเอกฉันท์ให้ดำเนินโครงการต่อไป' ความหมายหลักคือ?",
+    options: [
+      "ที่ประชุมปฏิเสธโครงการ",
+      "ที่ประชุมอนุมัติโครงการอย่างเป็นเอกฉันท์",
+      "ที่ประชุมยังไม่ตัดสินใจ",
+      "โครงการถูกเลื่อนออกไป",
+    ],
+    answer: 1,
+  },
+];
+
+// ─── Level 5 Set B ────────────────────────────────────────────────────────────
+
+const LEVEL_5B: CutflQuestion[] = [
+  {
+    id: "cutfl-5-5",
+    level: 5,
+    section: "vocabulary",
+    question: "คำว่า 'อำนวยความสะดวก' (am-nuai-khwaam-sà-duak) หมายถึง?",
+    options: ["To obstruct", "To facilitate", "To supervise", "To evaluate"],
+    answer: 1,
+  },
+  {
+    id: "cutfl-5-6",
+    level: 5,
+    section: "grammar",
+    question: "สำนวน 'ตีงูให้หลังหัก' มีความหมายว่า?",
+    options: [
+      "ต้องฆ่าสัตว์อันตรายก่อนที่มันจะทำอันตราย",
+      "ทำให้ศัตรูหมดพิษสงอย่างเด็ดขาด",
+      "ใช้ไม้ตีสัตว์เลื้อยคลาน",
+      "หลีกเลี่ยงการเผชิญกับอันตราย",
+    ],
+    answer: 1,
+  },
+  {
+    id: "cutfl-5-7",
+    level: 5,
+    section: "grammar",
+    question: "คำว่า 'ทั้งนี้' (tháng-níi) ในภาษาเขียนทางการใช้เพื่อ?",
+    options: [
+      "แสดงการสรุปทั้งหมดอีกครั้ง",
+      "เพิ่มข้อมูลที่เกี่ยวข้องหรืออ้างอิงถึงสิ่งที่กล่าวมา",
+      "แสดงความขัดแย้งกับประโยคก่อนหน้า",
+      "เริ่มต้นเรื่องราวใหม่ทั้งหมด",
+    ],
+    answer: 1,
+  },
+  {
+    id: "cutfl-5-8",
+    level: 5,
+    section: "reading",
+    question:
+      "อ่าน: 'มาตรการดังกล่าวมุ่งเน้นการสร้างสมดุลระหว่างการพัฒนาเศรษฐกิจและการอนุรักษ์สิ่งแวดล้อมอย่างยั่งยืน' ข้อความนี้กล่าวถึงเป้าหมายใด?",
+    options: [
+      "การเติบโตทางเศรษฐกิจโดยไม่คำนึงถึงสิ่งแวดล้อม",
+      "การหยุดการพัฒนาเพื่อรักษาสิ่งแวดล้อม",
+      "การสร้างความสมดุลระหว่างการพัฒนาและการอนุรักษ์สิ่งแวดล้อม",
+      "การให้ความสำคัญกับสิ่งแวดล้อมมากกว่าเศรษฐกิจ",
+    ],
+    answer: 2,
+  },
+];
+
 // ─── Combined ─────────────────────────────────────────────────────────────────
 
 export const CUTFL_QUESTIONS: CutflQuestion[] = [
-  ...LEVEL_1,
-  ...LEVEL_2,
-  ...LEVEL_3,
-  ...LEVEL_4,
-  ...LEVEL_5,
+  ...LEVEL_1, ...LEVEL_1B,
+  ...LEVEL_2, ...LEVEL_2B,
+  ...LEVEL_3, ...LEVEL_3B,
+  ...LEVEL_4, ...LEVEL_4B,
+  ...LEVEL_5, ...LEVEL_5B,
 ];
 
 function shuffle<T>(arr: T[]): T[] {
@@ -252,8 +468,9 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 export function getCutflQuestions(): CutflQuestion[] {
-  const byLevel = (n: number) => CUTFL_QUESTIONS.filter((q) => q.level === n);
-  return [1, 2, 3, 4, 5].flatMap((n) => shuffle(byLevel(n)));
+  const allByLevel = (n: number) => CUTFL_QUESTIONS.filter((q) => q.level === n);
+  // Pick exactly 4 questions per level from the combined pool (shuffled)
+  return [1, 2, 3, 4, 5].flatMap((n) => shuffle(allByLevel(n)).slice(0, 4));
 }
 
 export type CutflResult = {

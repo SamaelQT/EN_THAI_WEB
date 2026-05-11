@@ -125,7 +125,8 @@ export async function createRoadmap(
     start,
     busyDays,
     weeklyHours,
-    learningFocus
+    learningFocus,
+    targetExam ?? "general"
   );
 
   await prisma.roadmap.deleteMany({ where: { userId, language } });
