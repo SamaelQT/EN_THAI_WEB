@@ -18,9 +18,34 @@ const CUTFL_TO_CEFR: Record<string, Level> = {
   "Level 5": "C1",
 };
 
+// TOEIC result labels → CEFR (stored by placement test as non-CEFR strings)
+const TOEIC_TO_CEFR: Record<string, Level> = {
+  "Proficient":         "C1",
+  "Advanced":          "B2",
+  "Upper-Intermediate": "B1",
+  "Intermediate":      "A2",
+  "Elementary":        "A2",
+  "Beginner":          "A1",
+};
+
+// IELTS band strings → CEFR
+const IELTS_TO_CEFR: Record<string, Level> = {
+  "9.0": "C2", "8.5": "C2", "8.0": "C2",
+  "7.5": "C1", "7.0": "C1",
+  "6.5": "B2", "6.0": "B2", "5.5": "B2",
+  "5.0": "B1", "4.5": "B1", "4.0": "B1",
+  "3.5": "A2", "3.0": "A2",
+  "2.5": "A1", "2.0": "A1",
+};
+
 /** Convert any level string to a CEFR Level for internal computation */
 function toCefrLevel(level: string): Level {
-  return CUTFL_TO_CEFR[level] ?? (level as Level);
+  return (
+    CUTFL_TO_CEFR[level] ??
+    TOEIC_TO_CEFR[level] ??
+    IELTS_TO_CEFR[level] ??
+    (level as Level)
+  );
 }
 
 export class RoadmapServiceError extends Error {
