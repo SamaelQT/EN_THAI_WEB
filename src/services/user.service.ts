@@ -1,13 +1,8 @@
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-const MAX_SIZE = 5 * 1024 * 1024;
-const UPLOAD_DIR =
-  process.env.UPLOAD_DIR ??
-  path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "avatars");
+const MAX_SIZE = 2 * 1024 * 1024; // 2MB — giới hạn thấp hơn vì lưu vào DB
 
 export class UserServiceError extends Error {
   constructor(message: string, public status: number) {
@@ -37,16 +32,12 @@ export async function uploadAvatar(userId: string, file: File) {
   if (!ALLOWED_TYPES.includes(file.type))
     throw new UserServiceError("Chỉ chấp nhận ảnh JPG, PNG, WebP, GIF", 400);
   if (file.size > MAX_SIZE)
-    throw new UserServiceError("Ảnh tối đa 5MB", 400);
+    throw new UserServiceError("Ảnh tối đa 2MB", 400);
 
-  const ext = file.type.split("/")[1].replace("jpeg", "jpg");
-  const filename = `${userId}.${ext}`;
-
-  await mkdir(UPLOAD_DIR, { recursive: true });
   const bytes = await file.arrayBuffer();
-  await writeFile(path.join(UPLOAD_DIR, filename), Buffer.from(bytes));
+  const base64 = Buffer.from(bytes).toString("base64");
+  const imageUrl = `data:${file.type};base64,${base64}`;
 
-  const imageUrl = `/api/avatars/${filename}`;
   await prisma.user.update({ where: { id: userId }, data: { image: imageUrl } });
   return imageUrl;
 }
