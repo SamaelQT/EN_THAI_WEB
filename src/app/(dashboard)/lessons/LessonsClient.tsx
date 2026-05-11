@@ -101,7 +101,7 @@ function ScoreBadge({ score }: { score: number }) {
 
 // ── Types ─────────────────────────────────────────────────────
 
-type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number; targetExam?: string };
+type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number; targetExam?: string; targetScore?: number | null };
 
 type Props = {
   enRoadmap: Roadmap | null;
@@ -1227,6 +1227,15 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
   const hasTh = !!thRoadmap;
   const hasAnyRoadmap = hasEn || hasTh;
   const currentLevel = (lang === "english" ? enRoadmap : thRoadmap)?.currentLevel ?? "";
+  const activeRoadmap = lang === "english" ? enRoadmap : thRoadmap;
+  const roadmapSubtitle = (() => {
+    if (!activeRoadmap || !currentLevel) return "";
+    const exam = activeRoadmap.targetExam;
+    const score = activeRoadmap.targetScore;
+    if (exam === "TOEIC" && score) return `TOEIC · Mục tiêu ${score} (hiện tại: ${currentLevel})`;
+    if (exam === "IELTS" && score) return `IELTS · Mục tiêu ${(score / 10).toFixed(1)} (hiện tại: ${currentLevel})`;
+    return `Trình độ ${currentLevel}`;
+  })();
 
   const lessonTypes = [
     { type: "vocabulary", label: "Từ vựng", icon: "📚", desc: "Học từ mới theo chủ đề" },
@@ -1243,7 +1252,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Bài học</h1>
-          {currentLevel && <p className="text-muted-foreground mt-1">Trình độ {currentLevel}</p>}
+          {roadmapSubtitle && <p className="text-muted-foreground mt-1">{roadmapSubtitle}</p>}
         </div>
         <div className="flex gap-2">
           {hasEn && (

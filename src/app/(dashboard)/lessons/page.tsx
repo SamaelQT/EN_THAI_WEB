@@ -61,10 +61,10 @@ export default async function LessonsPage({
 
   // Strip weeks from roadmap objects before passing (not needed by client)
   const enRoadmapMeta = enRoadmap
-    ? { id: enRoadmap.id, language: enRoadmap.language, currentLevel: enRoadmap.currentLevel, targetLevel: enRoadmap.targetLevel, totalWeeks: enRoadmap.totalWeeks, targetExam: enRoadmap.targetExam ?? "general" }
+    ? { id: enRoadmap.id, language: enRoadmap.language, currentLevel: enRoadmap.currentLevel, targetLevel: enRoadmap.targetLevel, totalWeeks: enRoadmap.totalWeeks, targetExam: enRoadmap.targetExam ?? "general", targetScore: enRoadmap.targetScore ?? null }
     : null;
   const thRoadmapMeta = thRoadmap
-    ? { id: thRoadmap.id, language: thRoadmap.language, currentLevel: thRoadmap.currentLevel, targetLevel: thRoadmap.targetLevel, totalWeeks: thRoadmap.totalWeeks, targetExam: thRoadmap.targetExam ?? "general" }
+    ? { id: thRoadmap.id, language: thRoadmap.language, currentLevel: thRoadmap.currentLevel, targetLevel: thRoadmap.targetLevel, totalWeeks: thRoadmap.totalWeeks, targetExam: thRoadmap.targetExam ?? "general", targetScore: thRoadmap.targetScore ?? null }
     : null;
 
   return (
