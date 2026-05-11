@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { createNotification } from "./notification.service";
-import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 
 const SYSTEM_PROMPT = `You are a language teaching assistant for Vietnamese learners studying English or Thai.
 Generate lesson content as valid JSON only — no markdown, no extra text.
@@ -198,18 +198,20 @@ export async function completeLesson(
   return { xpGained, newStreak, newAchievements, weekAdvanced };
 }
 
-// ── Gemini helper ──────────────────────────────────────────────────────────
+// ── Groq helper ────────────────────────────────────────────────────────────
 
-async function callGemini(prompt: string): Promise<any> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
-    config: { systemInstruction: SYSTEM_PROMPT },
+async function callAI(prompt: string): Promise<any> {
+  const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
+  const response = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: prompt },
+    ],
+    response_format: { type: "json_object" },
   });
-  const raw = response.text ?? "";
-  const cleaned = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
-  return JSON.parse(cleaned);
+  const raw = response.choices[0]?.message?.content ?? "{}";
+  return JSON.parse(raw);
 }
 
 // ── generateLesson ─────────────────────────────────────────────────────────
@@ -234,13 +236,13 @@ export async function generateLesson(lessonType: string, language: string, level
       }
     }
 
-    if (!process.env.GEMINI_API_KEY) {
+    if (!process.env.GROQ_API_KEY) {
       const err = new Error("Bài học này chưa có sẵn.") as Error & { code: string };
       err.code = "NO_API_KEY";
       throw err;
     }
 
-    const lesson = await callGemini(buildPrompt({ lessonType, language, level, topic }));
+    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic }));
 
     // Only cache if first time (not a variant for completed lesson)
     if (!alreadyCompleted) {
@@ -281,13 +283,13 @@ export async function generateLesson(lessonType: string, language: string, level
     try { return JSON.parse(anyLesson.content); } catch { /* fall through */ }
   }
 
-  if (!process.env.GEMINI_API_KEY) {
+  if (!process.env.GROQ_API_KEY) {
     const err = new Error("Bài học này chưa có sẵn.") as Error & { code: string };
     err.code = "NO_API_KEY";
     throw err;
   }
 
-  const lesson = await callGemini(buildPrompt({ lessonType, language, level }));
+  const lesson = await callAI(buildPrompt({ lessonType, language, level }));
   await prisma.lesson.upsert({
     where: { id: lessonId },
     update: { content: JSON.stringify(lesson), title: lesson.title ?? lessonId },

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { GoogleGenAI } from "@google/genai";
+import Groq from "groq-sdk";
 
 export type ReviewType =
   | "vocabulary"
@@ -95,26 +95,22 @@ export async function getOrGenerateReviewSet(
   });
   if (existing) return existing;
 
-  // Generate via Gemini
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY not configured");
+  // Generate via Groq
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error("GROQ_API_KEY not configured");
 
-  const genAI = new GoogleGenAI({ apiKey });
+  const groq = new Groq({ apiKey });
   const count = QUESTION_COUNT[type];
   const prompt = buildPrompt(language, type, topic, level, count);
 
-  const result = await genAI.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: prompt,
+  const result = await groq.chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_object" },
   });
-  const text = (result.text ?? "").trim();
+  const text = result.choices[0]?.message?.content ?? "{}";
 
-  // Strip markdown code fences if present
-  const json = text.startsWith("```")
-    ? text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "")
-    : text;
-
-  const parsed = JSON.parse(json) as {
+  const parsed = JSON.parse(text) as {
     title: string;
     description: string;
     questions: {
