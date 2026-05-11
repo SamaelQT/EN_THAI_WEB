@@ -92,8 +92,9 @@ export function nextNonBusyDate(from: Date, busyDays: number[]): Date {
 /**
  * Produce a list of `count` calendar dates starting from (and including) `startDate`,
  * skipping any day whose getDay() is in busyDays.
+ * sessionsPerDay > 1 means the same calendar date is repeated that many times.
  */
-export function scheduleDates(startDate: Date, count: number, busyDays: number[]): Date[] {
+export function scheduleDates(startDate: Date, count: number, busyDays: number[], sessionsPerDay = 1): Date[] {
   const dates: Date[] = [];
   const d = new Date(startDate);
   d.setHours(0, 0, 0, 0);
@@ -102,7 +103,9 @@ export function scheduleDates(startDate: Date, count: number, busyDays: number[]
     d.setDate(d.getDate() + 1);
   }
   while (dates.length < count) {
-    dates.push(new Date(d));
+    for (let s = 0; s < sessionsPerDay && dates.length < count; s++) {
+      dates.push(new Date(d));
+    }
     d.setDate(d.getDate() + 1);
     while (busyDays.includes(d.getDay())) {
       d.setDate(d.getDate() + 1);
@@ -280,13 +283,15 @@ export function generateWeeklyPlan(
   // Resolve skill pool for this focus
   const focusSkills = FOCUS_SKILLS[learningFocus] ?? FOCUS_SKILLS.comprehensive;
 
-  // Lessons per week: bounded by available days and weekly hours
+  // Lessons per week: allow multiple sessions per day for high-intensity
   const availableDaysPerWeek = Math.max(1, 7 - busyDays.length);
-  const lessonsPerWeek = Math.min(weeklyHours, availableDaysPerWeek);
+  // sessionsPerDay: how many lessons fit in a day given weeklyHours spread across available days
+  const sessionsPerDay = Math.max(1, Math.round(weeklyHours / availableDaysPerWeek));
+  const lessonsPerWeek = availableDaysPerWeek * sessionsPerDay;
 
   // Build a flat list of all lesson dates across the entire roadmap
   const totalLessons = totalWeeks * lessonsPerWeek;
-  const allDates = scheduleDates(startDate, totalLessons, busyDays);
+  const allDates = scheduleDates(startDate, totalLessons, busyDays, sessionsPerDay);
 
   const plans: WeekPlan[] = [];
   let lessonIdx = 0;
