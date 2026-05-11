@@ -3,6 +3,7 @@ services:
     name: linguapath
     runtime: node
     plan: free
+    region: oregon
     buildCommand: npm ci && npm run build
     startCommand: npm start
     nodeVersion: "20"
