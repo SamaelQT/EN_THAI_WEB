@@ -101,7 +101,7 @@ function ScoreBadge({ score }: { score: number }) {
 
 // ── Types ─────────────────────────────────────────────────────
 
-type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number; targetExam?: string; targetScore?: number | null };
+type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number; targetExam?: string; targetScore?: number | null; placementTestLevel?: string | null; placementTestType?: string | null };
 
 type Props = {
   enRoadmap: Roadmap | null;
@@ -1232,8 +1232,10 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     if (!activeRoadmap || !currentLevel) return "";
     const exam = activeRoadmap.targetExam;
     const score = activeRoadmap.targetScore;
-    if (exam === "TOEIC" && score) return `TOEIC · Mục tiêu ${score} (hiện tại: ${currentLevel})`;
-    if (exam === "IELTS" && score) return `IELTS · Mục tiêu ${(score / 10).toFixed(1)} (hiện tại: ${currentLevel})`;
+    // Dùng level gốc từ placement test (TOEIC/IELTS label), không quy đổi sang CEFR
+    const rawLevel = activeRoadmap.placementTestLevel ?? currentLevel;
+    if (exam === "TOEIC" && score) return `TOEIC · Mục tiêu ${score} · Hiện tại: ${rawLevel}`;
+    if (exam === "IELTS" && score) return `IELTS · Mục tiêu ${(score / 10).toFixed(1)} · Hiện tại: ${rawLevel}`;
     return `Trình độ ${currentLevel}`;
   })();
 
