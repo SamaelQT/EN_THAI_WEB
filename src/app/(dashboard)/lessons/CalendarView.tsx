@@ -330,8 +330,24 @@ export default function CalendarView({ lessonDays, onStartLesson }: Props) {
                     )}
 
                     {isMissed && (
-                      <div className="flex items-center gap-1 text-xs text-destructive font-medium">
-                        <AlertCircle size={12} /> Bị bỏ lỡ
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-1 text-xs text-destructive font-medium">
+                          <AlertCircle size={12} /> Bị bỏ lỡ
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full h-7 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() =>
+                            onStartLesson
+                              ? onStartLesson(lesson.lessonType, lesson.language, lesson.currentLevel, lesson.id, lesson.examType)
+                              : router.push(
+                                  `/lessons/learn?type=${lesson.lessonType}&lang=${lesson.language}&level=${lesson.currentLevel}&dayId=${lesson.id}`
+                                )
+                          }
+                        >
+                          📖 Học bù ngay →
+                        </Button>
                       </div>
                     )}
 
