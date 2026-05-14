@@ -2,10 +2,15 @@ import { prisma } from "@/lib/db";
 import { createNotification } from "./notification.service";
 import Groq from "groq-sdk";
 
-const SYSTEM_PROMPT = `You are a language teaching assistant for Vietnamese learners studying English or Thai.
-Generate lesson content as valid JSON only — no markdown, no extra text.
-All explanations and instructions must be in Vietnamese.
-Keep examples natural and practical for everyday use.`;
+const SYSTEM_PROMPT = `You are an expert language teacher creating structured lessons for Vietnamese learners studying English or Thai.
+Output ONLY valid JSON — no markdown wrapper, no extra text before or after.
+Rules:
+- All explanations, instructions, and question text must be in Vietnamese
+- All example sentences and phrases must include Vietnamese translations
+- Examples must be complete, natural sentences — never fragments
+- Grammar explanations must be thorough: cover usage cases, sentence structures, signal words, and common mistakes
+- Quiz must have exactly 6 questions with diverse question types (fill-in-blank, meaning, error correction, context usage)
+- Content depth must be sufficient that a learner genuinely understands the topic after studying`;
 
 type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string; examType?: string };
 
@@ -26,65 +31,113 @@ export function topicToSlug(topic: string): string {
 function buildPrompt({ lessonType, language, level, topic, examType }: GenerateRequest): string {
   const langLabel = language === "english" ? "tiếng Anh" : "tiếng Thái";
 
-  // Exam-specific context injected into the prompt
   const examContext: Record<string, string> = {
-    TOEIC: `Bài học này phục vụ ôn thi TOEIC (Listening & Reading). Tập trung vào từ vựng kinh doanh, văn phòng; ngữ pháp Part 5-6; chiến lược nghe Part 1-4; đọc Part 7. KHÔNG dùng nội dung Speaking hay Writing IELTS. Câu hỏi quiz mô phỏng định dạng TOEIC Part 5 (chọn từ điền vào chỗ trống) và Part 7 (đọc hiểu).`,
-    IELTS: `Bài học này phục vụ ôn thi IELTS (Academic). Tập trung đúng kỹ năng: Listening theo Section 1-4, Reading dạng T/F/NG & matching, Writing Task 1 (biểu đồ) hoặc Task 2 (essay), Speaking theo Part 1-3 với band descriptor. Câu hỏi quiz mô phỏng định dạng IELTS thực tế.`,
-    general: `Bài học này theo khung CEFR tổng quát, không gắn với kỳ thi cụ thể. Tập trung giao tiếp thực tế, từ vựng hàng ngày và ngữ pháp nền tảng.`,
+    TOEIC: `Bài học phục vụ ôn thi TOEIC (Listening & Reading). Tập trung từ vựng kinh doanh/văn phòng, ngữ pháp Part 5-6, chiến lược nghe Part 1-4, đọc hiểu Part 7. Câu quiz mô phỏng định dạng TOEIC Part 5 (điền vào chỗ trống) và Part 7 (đọc hiểu đoạn ngắn).`,
+    IELTS: `Bài học phục vụ ôn thi IELTS Academic. Listening theo Section 1-4, Reading dạng True/False/Not Given & matching headings, Writing Task 1 (biểu đồ/bảng) hoặc Task 2 (argumentative essay), Speaking Part 1-3 với band descriptor. Câu quiz mô phỏng định dạng IELTS thực tế.`,
+    general: `Bài học theo khung CEFR tổng quát, tập trung giao tiếp thực tế và ngữ pháp nền tảng.`,
   };
-  const examNote = examType && examContext[examType] ? `\n${examContext[examType]}` : "";
+  const examNote = examType && examContext[examType] ? `\nBỐI CẢNH THI: ${examContext[examType]}\n` : "";
+
+  const quizRequirements = `Quiz phải có ĐÚNG 6 câu hỏi, bao gồm các dạng đa dạng:
+- 2 câu điền vào chỗ trống (choose the correct form)
+- 2 câu chọn nghĩa / ngữ cảnh phù hợp
+- 1 câu phát hiện lỗi sai (error correction)
+- 1 câu vận dụng tình huống thực tế
+Mỗi câu có đúng 4 lựa chọn (A/B/C/D), chỉ 1 đáp án đúng. Câu hỏi viết bằng tiếng Việt, đáp án có thể là tiếng Anh/Thái.`;
 
   const schemas: Record<string, string> = {
     vocabulary: `{
-  "title": "Tên bài học",
-  "words": [{ "word": "từ gốc", "phonetic": "phiên âm", "meaning": "nghĩa tiếng Việt", "example": "câu ví dụ" }],
-  "quiz": [{ "q": "câu hỏi tiếng Việt", "options": ["A","B","C","D"], "answer": 0 }]
-}`,
+  "title": "string — tên bài học cụ thể (vd: 'Từ vựng về Công việc & Văn phòng')",
+  "words": [
+    {
+      "word": "string — từ gốc",
+      "phonetic": "string — phiên âm IPA",
+      "meaning": "string — nghĩa tiếng Việt chính xác",
+      "example": "string — 1 câu ví dụ hoàn chỉnh bằng tiếng Anh/Thái",
+      "example_vi": "string — dịch nghĩa câu ví dụ sang tiếng Việt"
+    }
+  ],
+  "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
+}
+YÊU CẦU words: Tạo ĐÚNG 10 từ vựng phù hợp trình độ ${level}, mỗi ví dụ phải là câu hoàn chỉnh và tự nhiên, có dịch nghĩa tiếng Việt đi kèm.`,
+
     grammar: `{
-  "title": "Tên bài học",
-  "explanation": "Giải thích ngữ pháp bằng tiếng Việt, dùng ký hiệu markdown đơn giản",
-  "quiz": [{ "q": "câu hỏi", "options": ["A","B","C","D"], "answer": 0 }]
+  "title": "string — tên bài học cụ thể (vd: 'Thì Hiện Tại Hoàn Thành')",
+  "explanation": "string — giải thích ngữ pháp chi tiết BẰNG TIẾNG VIỆT theo cấu trúc markdown sau:\n## 1. Khi nào dùng?\n(Liệt kê 3-4 trường hợp sử dụng chính, mỗi trường hợp có 1 câu ví dụ kèm dịch nghĩa)\n\n## 2. Cấu trúc câu\n| Loại câu | Công thức | Ví dụ | Dịch nghĩa |\n|----------|-----------|-------|-----------|\n(Tạo bảng đầy đủ: Khẳng định / Phủ định / Câu hỏi Yes-No / Câu hỏi Wh-)\n\n## 3. Từ/dấu hiệu nhận biết\n(Liệt kê 5-7 signal words thường gặp, mỗi cái có 1 ví dụ ngắn + dịch)\n\n## 4. Ví dụ tình huống thực tế\n(Viết 4 câu ví dụ đa dạng tình huống, in đậm phần ngữ pháp trọng tâm, kèm dịch nghĩa tiếng Việt)\n\n## 5. Lỗi thường gặp ❌→✅\n(Liệt kê 3 lỗi sai phổ biến, mỗi lỗi: câu sai → câu đúng → giải thích ngắn)",
+  "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
 }`,
+
     reading: `{
-  "title": "Tên bài đọc",
-  "passage": "Đoạn văn bản 150-200 từ phù hợp trình độ",
-  "quiz": [{ "q": "câu hỏi hiểu văn bản", "options": ["A","B","C","D"], "answer": 0 }]
-}`,
+  "title": "string — tên bài đọc cụ thể",
+  "passage": "string — đoạn văn 180-220 từ, phù hợp trình độ ${level}, viết hoàn chỉnh và tự nhiên. Phải có ít nhất 3 đoạn rõ ràng.",
+  "vocab_highlight": [
+    { "word": "string — từ khó trong bài", "meaning": "string — nghĩa tiếng Việt" }
+  ],
+  "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
+}
+YÊU CẦU: vocab_highlight có 4-5 từ quan trọng từ đoạn văn. Quiz 6 câu kiểm tra hiểu ý chính, chi tiết, từ vựng trong bài, và suy luận.`,
+
     listening: `{
-  "title": "Luyện nghe – Mô phỏng",
-  "transcript": "Đoạn hội thoại hoặc văn bản mô phỏng bài nghe",
-  "context": "Mô tả tình huống bằng tiếng Việt",
-  "quiz": [{ "q": "câu hỏi về nội dung", "options": ["A","B","C","D"], "answer": 0 }]
-}`,
+  "title": "string — tên bài nghe cụ thể",
+  "context": "string — mô tả tình huống bằng tiếng Việt (ai đang nói, ở đâu, về chủ đề gì)",
+  "transcript": "string — hội thoại hoặc độc thoại mô phỏng bài nghe, viết đầy đủ theo format 'A: ... / B: ...' hoặc 'Narrator: ...', dài ít nhất 150 từ, tự nhiên như tiếng nói thật",
+  "key_phrases": [
+    { "phrase": "string — cụm từ quan trọng trong transcript", "meaning": "string — nghĩa tiếng Việt" }
+  ],
+  "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
+}
+YÊU CẦU: key_phrases có 4-5 cụm. Quiz 6 câu kiểm tra nội dung nghe: ý chính, chi tiết cụ thể, từ vựng, thái độ/mục đích người nói.`,
+
     writing: `{
-  "title": "Luyện viết",
-  "prompt": "Đề bài viết bằng tiếng Việt",
-  "tips": ["gợi ý 1", "gợi ý 2", "gợi ý 3"],
-  "example": "Bài viết mẫu ngắn",
-  "quiz": [{ "q": "câu hỏi về cấu trúc/từ vựng trong bài", "options": ["A","B","C","D"], "answer": 0 }]
-}`,
+  "title": "string — tên bài viết cụ thể",
+  "prompt": "string — đề bài viết rõ ràng bằng tiếng Việt, nêu rõ yêu cầu (viết gì, bao nhiêu từ, cho ai)",
+  "structure": [
+    { "part": "string — tên phần (Mở bài / Thân bài 1 / Thân bài 2 / Kết bài)", "guide": "string — hướng dẫn viết phần đó bằng tiếng Việt" }
+  ],
+  "useful_phrases": ["string — cụm từ hữu ích (song ngữ Anh – Việt)"],
+  "example": "string — bài viết mẫu hoàn chỉnh theo đề bài, dài 80-120 từ",
+  "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
+}
+YÊU CẦU: structure có 4 phần. useful_phrases có 5-6 cụm. Quiz 6 câu về cấu trúc văn bản, từ nối, từ vựng học thuật.`,
+
     speaking: `{
-  "title": "Luyện nói",
-  "topic": "Chủ đề nói chuyện",
-  "phrases": [{ "phrase": "câu mẫu", "phonetic": "phiên âm", "meaning": "nghĩa tiếng Việt" }],
-  "dialogue": [{ "speaker": "A", "text": "câu nói", "translation": "dịch nghĩa" }],
-  "quiz": [{ "q": "câu hỏi", "options": ["A","B","C","D"], "answer": 0 }]
-}`,
+  "title": "string — tên bài nói cụ thể",
+  "topic": "string — chủ đề câu hỏi gợi mở bằng tiếng Việt",
+  "phrases": [
+    { "phrase": "string — câu mẫu tiếng Anh/Thái", "phonetic": "string — phiên âm", "meaning": "string — nghĩa tiếng Việt", "usage_tip": "string — gợi ý khi nào dùng câu này" }
+  ],
+  "dialogue": [
+    { "speaker": "string — A hoặc B", "text": "string — câu nói", "translation": "string — dịch nghĩa tiếng Việt" }
+  ],
+  "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
+}
+YÊU CẦU: phrases có ĐÚNG 6 câu mẫu thực tế. dialogue có 8-10 lượt thoại tạo hội thoại hoàn chỉnh. Quiz 6 câu về ngữ cảnh dùng các phrases.`,
+
     review: `{
-  "title": "Ôn tập tổng hợp",
-  "summary": "Tóm tắt ngắn các điểm ngữ pháp và từ vựng quan trọng",
-  "words": [{ "word": "từ quan trọng", "phonetic": "phiên âm", "meaning": "nghĩa tiếng Việt", "example": "câu ví dụ" }],
-  "quiz": [{ "q": "câu hỏi ôn tập tổng hợp", "options": ["A","B","C","D"], "answer": 0 }]
-}`,
+  "title": "string — tên bài ôn tập cụ thể",
+  "summary": "string — tóm tắt các điểm ngữ pháp và từ vựng quan trọng của tuần, trình bày bằng markdown có đầu mục rõ ràng, dài ít nhất 10 dòng",
+  "words": [
+    { "word": "string", "phonetic": "string", "meaning": "string", "example": "string — câu ví dụ", "example_vi": "string — dịch nghĩa" }
+  ],
+  "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
+}
+YÊU CẦU: words có 8 từ quan trọng nhất của chủ đề tuần. Quiz 6 câu ôn tập tổng hợp cả ngữ pháp lẫn từ vựng.`,
   };
 
   const schema = schemas[lessonType] ?? schemas.vocabulary;
-  const typeLabel = lessonType === "review" ? "ôn tập tổng hợp" : lessonType;
-  const topicLine = topic ? `Chủ đề bài học: "${topic}".\n` : "";
-  return `Tạo một bài học ${typeLabel} về ${langLabel} cho trình độ ${level}.
+  const topicLine = topic ? `CHỦ ĐỀ BÀI HỌC: "${topic}"\n` : "";
+
+  return `Tạo một bài học ${lessonType} ${langLabel} cho trình độ ${level} (khung CEFR).
 ${topicLine}${examNote}
-Bài học phải phù hợp với trình độ ${level} theo khung CEFR, với 6 mục (words/phrases nếu có) và 3 câu hỏi quiz.
-Trả về JSON hợp lệ theo schema sau, không có gì thêm:\n\n${schema}`;
+${quizRequirements}
+
+Yêu cầu chất lượng:
+- Mọi ví dụ phải là câu HOÀN CHỈNH, tự nhiên, có ngữ cảnh rõ ràng
+- Mọi câu tiếng Anh/Thái đều phải có dịch nghĩa tiếng Việt đi kèm
+- Nội dung phải ĐỦ ĐỘ SÂU: người học cảm thấy hiểu bài sau khi đọc xong
+- Độ khó phù hợp đúng trình độ ${level}
+
+Trả về JSON hợp lệ theo schema sau, KHÔNG có text thêm bên ngoài JSON:\n\n${schema}`;
 }
 
 // ── Achievement rules ──────────────────────────────────────────────────────

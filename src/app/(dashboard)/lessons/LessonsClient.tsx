@@ -1018,6 +1018,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground mt-2 italic">"{w.example}"</p>
+                  {w.example_vi && (
+                    <p className="text-xs text-muted-foreground/70 mt-0.5 pl-1">→ {w.example_vi}</p>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -1027,14 +1030,100 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
         {/* Grammar lesson */}
         {activeLesson.explanation && (
           <Card>
-            <CardContent className="pt-6 prose prose-sm max-w-none">
-              {activeLesson.explanation.split("\n").map((line: string, i: number) => {
-                if (line.startsWith("# ")) return <h2 key={i} className="text-xl font-bold mt-0">{line.slice(2)}</h2>;
-                if (line.startsWith("## ")) return <h3 key={i} className="text-base font-semibold">{line.slice(3)}</h3>;
-                if (line.startsWith("- ")) return <p key={i} className="text-sm">• {line.slice(2)}</p>;
-                if (line.startsWith("| ")) return null;
-                return <p key={i} className="text-sm">{line}</p>;
-              })}
+            <CardContent className="pt-6 space-y-3">
+              {(() => {
+                const lines: string[] = activeLesson.explanation.split("\n");
+                const elements: React.ReactNode[] = [];
+                let i = 0;
+                while (i < lines.length) {
+                  const line = lines[i];
+                  // Heading ##
+                  if (line.startsWith("## ")) {
+                    elements.push(
+                      <h3 key={i} className="text-sm font-bold text-primary mt-4 mb-1 first:mt-0">
+                        {line.slice(3)}
+                      </h3>
+                    );
+                    i++; continue;
+                  }
+                  // Heading #
+                  if (line.startsWith("# ")) {
+                    elements.push(
+                      <h2 key={i} className="text-base font-bold mt-2 mb-1 first:mt-0">
+                        {line.slice(2)}
+                      </h2>
+                    );
+                    i++; continue;
+                  }
+                  // Markdown table — collect all consecutive | lines
+                  if (line.startsWith("|")) {
+                    const tableLines: string[] = [];
+                    while (i < lines.length && lines[i].startsWith("|")) {
+                      tableLines.push(lines[i]);
+                      i++;
+                    }
+                    // Parse rows, skip separator row (---|---)
+                    const rows = tableLines
+                      .filter((r) => !/^\|[\s\-|]+\|$/.test(r.trim()))
+                      .map((r) =>
+                        r.split("|").slice(1, -1).map((cell) => cell.trim())
+                      );
+                    if (rows.length > 0) {
+                      const [headerRow, ...bodyRows] = rows;
+                      elements.push(
+                        <div key={`table-${i}`} className="overflow-x-auto rounded-lg border">
+                          <table className="w-full text-xs">
+                            <thead className="bg-muted/60">
+                              <tr>
+                                {headerRow.map((cell, ci) => (
+                                  <th key={ci} className="px-3 py-2 text-left font-semibold text-muted-foreground border-b">
+                                    {cell}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {bodyRows.map((row, ri) => (
+                                <tr key={ri} className={ri % 2 === 0 ? "bg-background" : "bg-muted/20"}>
+                                  {row.map((cell, ci) => (
+                                    <td key={ci} className="px-3 py-2 border-b border-border/40 leading-relaxed">
+                                      {cell}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    }
+                    continue;
+                  }
+                  // Bold inline **text**
+                  if (line.startsWith("- ") || line.startsWith("* ")) {
+                    const text = line.slice(2);
+                    elements.push(
+                      <p key={i} className="text-sm flex gap-2">
+                        <span className="text-primary mt-0.5 shrink-0">•</span>
+                        <span dangerouslySetInnerHTML={{ __html: text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }} />
+                      </p>
+                    );
+                    i++; continue;
+                  }
+                  // Empty line = spacer
+                  if (line.trim() === "") {
+                    i++; continue;
+                  }
+                  // Normal paragraph with **bold** support
+                  elements.push(
+                    <p key={i} className="text-sm leading-relaxed"
+                      dangerouslySetInnerHTML={{ __html: line.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>") }}
+                    />
+                  );
+                  i++;
+                }
+                return elements;
+              })()}
             </CardContent>
           </Card>
         )}
@@ -1043,8 +1132,20 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
         {activeLesson.passage && (
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-base">Đoạn văn</CardTitle></CardHeader>
-            <CardContent>
-              <p className="text-sm leading-relaxed">{activeLesson.passage}</p>
+            <CardContent className="space-y-4">
+              <p className="text-sm leading-relaxed whitespace-pre-line">{activeLesson.passage}</p>
+              {activeLesson.vocab_highlight?.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Từ vựng trong bài</p>
+                  <div className="flex flex-wrap gap-2">
+                    {activeLesson.vocab_highlight.map((v: { word: string; meaning: string }, i: number) => (
+                      <span key={i} className="text-xs bg-primary/10 text-primary rounded-full px-2.5 py-1">
+                        <strong>{v.word}</strong> — {v.meaning}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -1101,6 +1202,20 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
                 <p className="text-sm leading-relaxed whitespace-pre-line bg-muted/50 p-3 rounded-lg">
                   {activeLesson.transcript}
                 </p>
+              )}
+              {/* Key phrases */}
+              {activeLesson.key_phrases?.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cụm từ quan trọng</p>
+                  <div className="space-y-1.5">
+                    {activeLesson.key_phrases.map((kp: { phrase: string; meaning: string }, i: number) => (
+                      <div key={i} className="flex items-start gap-2 text-sm">
+                        <span className="text-primary shrink-0 mt-0.5">•</span>
+                        <span><strong>{kp.phrase}</strong> — <span className="text-muted-foreground">{kp.meaning}</span></span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
