@@ -149,6 +149,10 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
   const [convLevel, setConvLevel] = useState<string>("");
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>("");
+  // Listening lesson voice state
+  const [listeningVoiceA, setListeningVoiceA] = useState<string>("");
+  const [listeningVoiceB, setListeningVoiceB] = useState<string>("");
+  const [playingLineIdx, setPlayingLineIdx] = useState<number>(-1);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -234,24 +238,74 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     window.speechSynthesis.speak(utt);
   }
 
+  // Parse transcript into per-speaker lines: "A: Hello" → { speaker: "A", text: "Hello" }
+  function parseTranscriptLines(transcript: string): { speaker: string; text: string }[] {
+    return transcript
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((l) => {
+        const m = l.match(/^([A-Za-zÀ-ỹ][A-Za-zÀ-ỹ0-9 ]*?):\s+(.+)$/);
+        return m ? { speaker: m[1].trim(), text: m[2].trim() } : { speaker: "", text: l };
+      });
+  }
+
+  // Get unique speakers in order of appearance
+  function getTranscriptSpeakers(lines: { speaker: string; text: string }[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const l of lines) {
+      if (l.speaker && !seen.has(l.speaker)) { seen.add(l.speaker); out.push(l.speaker); }
+    }
+    return out;
+  }
+
   function playTranscript() {
     if (typeof window === "undefined" || !window.speechSynthesis) {
       toast.error("Trình duyệt không hỗ trợ phát âm");
       return;
     }
     window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(activeLesson.transcript);
-    utt.lang = getTTSLang();
-    utt.onend = () => { setIsPlayingAudio(false); setAudioRevealed(true); };
-    utt.onerror = () => { setIsPlayingAudio(false); setAudioRevealed(true); };
-    utteranceRef.current = utt;
+
+    const lines = parseTranscriptLines(activeLesson.transcript);
+    const speakers = getTranscriptSpeakers(lines);
+    const voices = window.speechSynthesis.getVoices();
+    const ttsPrefix = getTTSLang().slice(0, 2);
+    const defaultVoice = voices.find((v) => v.lang.startsWith(ttsPrefix));
+
     setIsPlayingAudio(true);
-    window.speechSynthesis.speak(utt);
+    setPlayingLineIdx(0);
+
+    let idx = 0;
+    function playNext() {
+      if (idx >= lines.length) {
+        setIsPlayingAudio(false);
+        setPlayingLineIdx(-1);
+        setAudioRevealed(true);
+        return;
+      }
+      setPlayingLineIdx(idx);
+      const { speaker, text } = lines[idx];
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang = getTTSLang();
+
+      // Speaker 0 → voiceA, Speaker 1 → voiceB, others → voiceA
+      const speakerIdx = speakers.indexOf(speaker);
+      const voiceURI = speakerIdx === 1 ? listeningVoiceB : listeningVoiceA;
+      const picked = voices.find((v) => v.voiceURI === voiceURI) ?? defaultVoice;
+      if (picked) utt.voice = picked;
+
+      utt.onend = () => { idx++; playNext(); };
+      utt.onerror = () => { setIsPlayingAudio(false); setPlayingLineIdx(-1); setAudioRevealed(true); };
+      window.speechSynthesis.speak(utt);
+    }
+    playNext();
   }
 
   function stopTranscript() {
     window.speechSynthesis.cancel();
     setIsPlayingAudio(false);
+    setPlayingLineIdx(-1);
     setAudioRevealed(true);
   }
 
@@ -1150,76 +1204,151 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
           </Card>
         )}
 
-        {/* B2 – Listening lesson */}
-        {activeLesson.transcript && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">🎧 {activeLesson.context}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {/* Playing state: waveform + stop */}
-              {isPlayingAudio && (
-                <div className="flex items-center gap-4 bg-primary/5 rounded-lg p-4">
-                  <AudioWaveform />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Đang phát...</p>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={stopTranscript} className="gap-1.5 shrink-0">
-                    <Square size={14} />
-                    Dừng
-                  </Button>
-                </div>
-              )}
+        {/* Listening lesson */}
+        {activeLesson.transcript && (() => {
+          const lines = parseTranscriptLines(activeLesson.transcript);
+          const speakers = getTranscriptSpeakers(lines);
+          const isDialogue = speakers.length >= 2;
+          const langVoices = availableVoices.filter((v) => v.lang.startsWith(getTTSLang().slice(0, 2)));
 
-              {/* Not yet played: show play button */}
-              {!isPlayingAudio && !audioRevealed && (
-                <div className="flex flex-col items-center gap-3 py-4">
-                  <Button onClick={playTranscript} size="lg" className="gap-2">
-                    <PlayCircle size={20} />
-                    Nghe đoạn hội thoại
-                  </Button>
-                  <button
-                    onClick={() => setAudioRevealed(true)}
-                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-                  >
-                    Xem transcript
-                  </button>
-                </div>
-              )}
+          // Avatar colors per speaker
+          const SPEAKER_COLORS = ["bg-blue-500", "bg-rose-500", "bg-emerald-500", "bg-amber-500"];
 
-              {/* During playback: show "Xem transcript" link */}
-              {isPlayingAudio && (
-                <button
-                  onClick={stopTranscript}
-                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-                >
-                  Xem transcript
-                </button>
-              )}
+          return (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">🎧 {activeLesson.context}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
 
-              {/* Transcript revealed */}
-              {audioRevealed && (
-                <p className="text-sm leading-relaxed whitespace-pre-line bg-muted/50 p-3 rounded-lg">
-                  {activeLesson.transcript}
-                </p>
-              )}
-              {/* Key phrases */}
-              {activeLesson.key_phrases?.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cụm từ quan trọng</p>
-                  <div className="space-y-1.5">
-                    {activeLesson.key_phrases.map((kp: { phrase: string; meaning: string }, i: number) => (
-                      <div key={i} className="flex items-start gap-2 text-sm">
-                        <span className="text-primary shrink-0 mt-0.5">•</span>
-                        <span><strong>{kp.phrase}</strong> — <span className="text-muted-foreground">{kp.meaning}</span></span>
+                {/* ── Voice selectors ── */}
+                {langVoices.length > 0 && (
+                  <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Chọn giọng đọc</p>
+                    {isDialogue ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        {speakers.slice(0, 2).map((spk, si) => (
+                          <div key={spk} className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`w-4 h-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center shrink-0 ${SPEAKER_COLORS[si]}`}>
+                                {spk[0]}
+                              </span>
+                              <span className="text-xs text-muted-foreground font-medium">{spk}</span>
+                            </div>
+                            <select
+                              value={si === 0 ? listeningVoiceA : listeningVoiceB}
+                              onChange={(e) => si === 0 ? setListeningVoiceA(e.target.value) : setListeningVoiceB(e.target.value)}
+                              disabled={isPlayingAudio}
+                              className="w-full text-xs rounded border bg-background px-2 py-1 disabled:opacity-50"
+                            >
+                              <option value="">Giọng mặc định</option>
+                              {langVoices.map((v) => (
+                                <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      <select
+                        value={listeningVoiceA}
+                        onChange={(e) => setListeningVoiceA(e.target.value)}
+                        disabled={isPlayingAudio}
+                        className="w-full text-xs rounded border bg-background px-2 py-1 disabled:opacity-50"
+                      >
+                        <option value="">Giọng mặc định</option>
+                        {langVoices.map((v) => (
+                          <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+                )}
+
+                {/* ── Playback controls ── */}
+                {isPlayingAudio ? (
+                  <div className="flex items-center gap-3 bg-primary/5 rounded-lg px-4 py-3">
+                    <AudioWaveform />
+                    <p className="flex-1 text-sm font-medium">Đang phát...</p>
+                    <Button size="sm" variant="outline" onClick={stopTranscript} className="gap-1.5 shrink-0">
+                      <Square size={13} /> Dừng
+                    </Button>
+                  </div>
+                ) : !audioRevealed ? (
+                  <div className="flex flex-col items-center gap-2 py-3">
+                    <Button onClick={playTranscript} size="lg" className="gap-2">
+                      <PlayCircle size={20} /> Nghe đoạn hội thoại
+                    </Button>
+                    <button
+                      onClick={() => setAudioRevealed(true)}
+                      className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                    >
+                      Xem transcript
+                    </button>
+                  </div>
+                ) : (
+                  <Button onClick={playTranscript} size="sm" variant="outline" className="w-full gap-2">
+                    <PlayCircle size={15} /> Nghe lại
+                  </Button>
+                )}
+
+                {/* ── Transcript lines ── */}
+                {(audioRevealed || isPlayingAudio) && (
+                  <div className={`rounded-lg border overflow-hidden ${isDialogue ? "divide-y" : "p-3 bg-muted/40"}`}>
+                    {isDialogue ? (
+                      lines.map((line, li) => {
+                        const si = speakers.indexOf(line.speaker);
+                        const isActive = playingLineIdx === li;
+                        return (
+                          <div
+                            key={li}
+                            className={`flex gap-3 px-3 py-2.5 transition-colors ${isActive ? "bg-primary/10" : "bg-background"}`}
+                          >
+                            <span className={`w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 ${SPEAKER_COLORS[si] ?? "bg-gray-400"}`}>
+                              {line.speaker ? line.speaker[0] : "?"}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-semibold text-muted-foreground mb-0.5">{line.speaker}</p>
+                              <p className={`text-sm leading-relaxed ${isActive ? "text-primary font-medium" : ""}`}>
+                                {line.text}
+                              </p>
+                            </div>
+                            {isActive && <span className="text-primary text-xs mt-1 shrink-0 animate-pulse">▶</span>}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      lines.map((line, li) => (
+                        <p
+                          key={li}
+                          className={`text-sm leading-relaxed transition-colors ${playingLineIdx === li ? "text-primary font-medium" : "text-foreground"}`}
+                        >
+                          {line.text}
+                        </p>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* ── Key phrases ── */}
+                {activeLesson.key_phrases?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cụm từ quan trọng</p>
+                    <div className="space-y-1.5">
+                      {activeLesson.key_phrases.map((kp: { phrase: string; meaning: string }, i: number) => (
+                        <div key={i} className="flex items-start gap-2 text-sm">
+                          <span className="text-primary shrink-0 mt-0.5">•</span>
+                          <span><strong>{kp.phrase}</strong> — <span className="text-muted-foreground">{kp.meaning}</span></span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Writing lesson */}
         {activeLesson.prompt && (
