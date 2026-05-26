@@ -38,7 +38,9 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(copy src\\\\proxy.ts src\\\\middleware.ts)",
-      "Bash(xargs grep -l \"placement\\\\|PlacementTest\\\\|getQuestionsForTest\")"
+      "Bash(xargs grep -l \"placement\\\\|PlacementTest\\\\|getQuestionsForTest\")",
+      "Bash(xargs grep -l \"signIn\\\\|login\\\\|credentials\")",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }
