@@ -37,13 +37,15 @@ export type LessonDay = {
   language: string;
   roadmapId: string;
   currentLevel: string;
+  targetLevel?: string;
+  totalWeeks?: number;
   busyDays: number[];
   examType?: string;
 };
 
 type Props = {
   lessonDays: LessonDay[];
-  onStartLesson?: (type: string, lang: string, level: string, dayId: string, examType?: string) => void;
+  onStartLesson?: (type: string, lang: string, level: string, dayId: string, examType?: string, weekTheme?: string, weekNumber?: number, totalWeeks?: number) => void;
 };
 
 export default function CalendarView({ lessonDays, onStartLesson }: Props) {
@@ -340,7 +342,7 @@ export default function CalendarView({ lessonDays, onStartLesson }: Props) {
                           className="w-full h-7 text-xs border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
                           onClick={() =>
                             onStartLesson
-                              ? onStartLesson(lesson.lessonType, lesson.language, lesson.currentLevel, lesson.id, lesson.examType)
+                              ? onStartLesson(lesson.lessonType, lesson.language, lesson.currentLevel, lesson.id, lesson.examType, lesson.weekTheme, lesson.weekNumber, lesson.totalWeeks)
                               : router.push(
                                   `/lessons/learn?type=${lesson.lessonType}&lang=${lesson.language}&level=${lesson.currentLevel}&dayId=${lesson.id}`
                                 )
@@ -358,7 +360,7 @@ export default function CalendarView({ lessonDays, onStartLesson }: Props) {
                           className="w-full h-7 text-xs"
                           onClick={() =>
                             onStartLesson
-                              ? onStartLesson(lesson.lessonType, lesson.language, lesson.currentLevel, lesson.id, lesson.examType)
+                              ? onStartLesson(lesson.lessonType, lesson.language, lesson.currentLevel, lesson.id, lesson.examType, lesson.weekTheme, lesson.weekNumber, lesson.totalWeeks)
                               : router.push(
                                   `/lessons/learn?type=${lesson.lessonType}&lang=${lesson.language}&level=${lesson.currentLevel}&dayId=${lesson.id}`
                                 )

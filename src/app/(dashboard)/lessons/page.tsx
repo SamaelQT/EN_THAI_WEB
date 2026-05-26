@@ -13,7 +13,7 @@ export default async function LessonsPage({
   const params = await searchParams;
   const lang = params.lang ?? "english";
 
-  const [enRoadmap, thRoadmap, testCount] = await Promise.all([
+  const [enRoadmap, thRoadmap, testCount, enStreak, thStreak] = await Promise.all([
     prisma.roadmap.findFirst({
       where: { userId: uid, language: "english", status: "active" },
       include: {
@@ -35,6 +35,8 @@ export default async function LessonsPage({
       },
     }),
     prisma.placementTest.count({ where: { userId: uid } }),
+    prisma.streak.findUnique({ where: { userId_language: { userId: uid, language: "english" } }, select: { currentStreak: true, longestStreak: true } }),
+    prisma.streak.findUnique({ where: { userId_language: { userId: uid, language: "thai" } }, select: { currentStreak: true, longestStreak: true } }),
   ]);
 
   // Flatten all roadmap days into LessonDay[] for CalendarView
@@ -54,6 +56,8 @@ export default async function LessonsPage({
           language: roadmap.language,
           roadmapId: roadmap.id,
           currentLevel: roadmap.currentLevel,
+          targetLevel: roadmap.targetLevel,
+          totalWeeks: roadmap.totalWeeks,
           busyDays: (roadmap as any).busyDays ?? [],
           examType: roadmap.targetExam ?? "general",
         });
@@ -77,6 +81,8 @@ export default async function LessonsPage({
       defaultLang={lang}
       userId={uid}
       hasPlacementTest={testCount > 0}
+      enStreak={enStreak?.currentStreak ?? 0}
+      thStreak={thStreak?.currentStreak ?? 0}
     />
   );
 }

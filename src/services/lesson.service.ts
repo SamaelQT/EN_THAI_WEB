@@ -12,7 +12,7 @@ Rules:
 - Quiz must have exactly 6 questions with diverse question types (fill-in-blank, meaning, error correction, context usage)
 - Content depth must be sufficient that a learner genuinely understands the topic after studying`;
 
-type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string; examType?: string };
+type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string; examType?: string; weekNumber?: number; totalWeeks?: number; dayId?: string };
 
 export function topicToSlug(topic: string): string {
   return topic
@@ -28,7 +28,7 @@ export function topicToSlug(topic: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-function buildPrompt({ lessonType, language, level, topic, examType }: GenerateRequest): string {
+function buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId }: GenerateRequest): string {
   const langLabel = language === "english" ? "tiếng Anh" : "tiếng Thái";
 
   const examContext: Record<string, string> = {
@@ -47,19 +47,23 @@ Mỗi câu có đúng 4 lựa chọn (A/B/C/D), chỉ 1 đáp án đúng. Câu h
 
   const schemas: Record<string, string> = {
     vocabulary: `{
-  "title": "string — tên bài học cụ thể (vd: 'Từ vựng về Công việc & Văn phòng')",
+  "title": "string — tên bài học cụ thể, phải nhắc rõ chủ đề (vd: 'Từ vựng Tài chính & Ngân hàng')",
   "words": [
     {
       "word": "string — từ gốc",
       "phonetic": "string — phiên âm IPA",
       "meaning": "string — nghĩa tiếng Việt chính xác",
-      "example": "string — 1 câu ví dụ hoàn chỉnh bằng tiếng Anh/Thái",
+      "example": "string — 1 câu ví dụ hoàn chỉnh bằng tiếng Anh/Thái, ngữ cảnh liên quan trực tiếp đến chủ đề",
       "example_vi": "string — dịch nghĩa câu ví dụ sang tiếng Việt"
     }
   ],
   "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
 }
-YÊU CẦU words: Tạo ĐÚNG 10 từ vựng phù hợp trình độ ${level}, mỗi ví dụ phải là câu hoàn chỉnh và tự nhiên, có dịch nghĩa tiếng Việt đi kèm.`,
+YÊU CẦU words: Tạo ĐÚNG 10 từ vựng thuộc CHỦ ĐỀ "${topic ?? "chủ đề bài học"}" ở trình độ ${level}.
+- Mỗi từ PHẢI thực sự thuộc chủ đề đó — KHÔNG dùng từ chung chung (hello, good, very...) không liên quan đến chủ đề
+- Chọn từ đặc trưng nhất, hữu ích nhất cho chủ đề này (danh từ chuyên ngành, động từ đặc trưng, tính từ miêu tả...)
+- Mỗi câu ví dụ phải hoàn chỉnh, tự nhiên, đặt từ đó vào ngữ cảnh thực tế của chủ đề
+- ${weekNumber ? `Đây là tuần ${weekNumber} — chọn từ khó hơn so với tuần đầu, không trùng lặp với từ vựng cơ bản đã học` : ""}`,
 
     grammar: `{
   "title": "string — tên bài học cụ thể (vd: 'Thì Hiện Tại Hoàn Thành')",
@@ -125,10 +129,25 @@ YÊU CẦU: words có 8 từ quan trọng nhất của chủ đề tuần. Quiz 
   };
 
   const schema = schemas[lessonType] ?? schemas.vocabulary;
-  const topicLine = topic ? `CHỦ ĐỀ BÀI HỌC: "${topic}"\n` : "";
+  // Include dayId as a unique seed so each roadmap day gets fresh AI content (not cached repeat)
+  const uniqueSeed = dayId ? `\nMÃ BÀI HỌC DUY NHẤT: ${dayId.slice(-8)} — tạo nội dung HOÀN TOÀN MỚI, không lặp lại bài trước.\n` : "";
+  const topicLine = topic ? `CHỦ ĐỀ BÀI HỌC: "${topic}"\n${uniqueSeed}` : uniqueSeed;
+
+  // Week-based difficulty context
+  let weekContext = "";
+  if (weekNumber && totalWeeks) {
+    const pct = Math.round((weekNumber / totalWeeks) * 100);
+    if (pct <= 25) {
+      weekContext = `\nVỊ TRÍ TRONG KHÓA HỌC: Tuần ${weekNumber}/${totalWeeks} (giai đoạn đầu – xây nền tảng, giải thích kỹ, ví dụ đơn giản và rõ ràng).\n`;
+    } else if (pct <= 60) {
+      weekContext = `\nVỊ TRÍ TRONG KHÓA HỌC: Tuần ${weekNumber}/${totalWeeks} (giai đoạn giữa – nâng độ phức tạp, thêm ngoại lệ, tình huống thực tế đa dạng).\n`;
+    } else {
+      weekContext = `\nVỊ TRÍ TRONG KHÓA HỌC: Tuần ${weekNumber}/${totalWeeks} (giai đoạn cuối – nội dung nâng cao, câu phức, học thuật/thi cử, quiz khó).\n`;
+    }
+  }
 
   return `Tạo một bài học ${lessonType} ${langLabel} cho trình độ ${level} (khung CEFR).
-${topicLine}${examNote}
+${topicLine}${weekContext}${examNote}
 ${quizRequirements}
 
 Yêu cầu chất lượng:
@@ -160,12 +179,15 @@ export async function completeLesson(
 ) {
   const { lessonType, language, level, score, timeSpent, dayId } = opts;
 
+  // Resolve lesson ID: roadmap days use day_<id>, free practice uses type_lang_level
+  const resolvedLessonId = dayId ? `day_${dayId}` : `${lessonType}_${language}_${level}`;
+
   // Upsert placeholder lesson
   const lesson = await prisma.lesson.upsert({
-    where: { id: `${lessonType}_${language}_${level}` },
+    where: { id: resolvedLessonId },
     update: {},
     create: {
-      id: `${lessonType}_${language}_${level}`,
+      id: resolvedLessonId,
       language, type: lessonType, level,
       title: `${lessonType} – ${level}`,
       content: "{}",
@@ -279,8 +301,42 @@ async function callAI(prompt: string): Promise<any> {
 
 // ── generateLesson ─────────────────────────────────────────────────────────
 
-export async function generateLesson(lessonType: string, language: string, level: string, topic?: string, userId?: string, examType?: string) {
+export async function generateLesson(lessonType: string, language: string, level: string, topic?: string, userId?: string, examType?: string, weekNumber?: number, totalWeeks?: number, dayId?: string) {
   if (!lessonType || !language || !level) throw new Error("Missing fields");
+
+  // Roadmap day lesson: each day gets its own unique cached content
+  if (dayId) {
+    const dayLessonId = `day_${dayId}`;
+
+    // Return cached lesson unless user already completed it (then generate fresh variant)
+    const alreadyCompleted = userId
+      ? await prisma.lessonProgress.findFirst({ where: { userId, lessonId: dayLessonId } })
+      : null;
+
+    if (!alreadyCompleted) {
+      const existing = await prisma.lesson.findUnique({ where: { id: dayLessonId } });
+      if (existing && existing.content !== "{}") {
+        try { return JSON.parse(existing.content); } catch { /* fall through to generate */ }
+      }
+    }
+
+    if (!process.env.GROQ_API_KEY) {
+      const err = new Error("Bài học này chưa có sẵn.") as Error & { code: string };
+      err.code = "NO_API_KEY";
+      throw err;
+    }
+
+    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId }));
+
+    if (!alreadyCompleted) {
+      await prisma.lesson.upsert({
+        where: { id: dayLessonId },
+        update: { content: JSON.stringify(lesson), title: lesson.title ?? dayLessonId },
+        create: { id: dayLessonId, language, type: lessonType, level, title: lesson.title ?? dayLessonId, content: JSON.stringify(lesson), xpReward: 15 },
+      });
+    }
+    return lesson;
+  }
 
   // Topic-based lesson: unique ID per topic, skip fallback chain
   if (topic) {
@@ -307,7 +363,7 @@ export async function generateLesson(lessonType: string, language: string, level
       throw err;
     }
 
-    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic, examType }));
+    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks }));
 
     // Only cache if first time (not a variant for completed lesson)
     if (!alreadyCompleted) {

@@ -74,6 +74,37 @@ const LESSON_CONTENT: Record<string, any> = {
 
 // ── Helper components ─────────────────────────────────────────
 
+/** Renders a row of flames that grows with the streak count */
+function StreakFire({ streak }: { streak: number }) {
+  if (streak === 0) return null;
+
+  // Flame tiers: each tier adds one more flame emoji
+  const flameCount =
+    streak >= 30 ? 5 :
+    streak >= 14 ? 4 :
+    streak >= 7  ? 3 :
+    streak >= 3  ? 2 : 1;
+
+  // Glow intensity grows with streak
+  const glowClass =
+    streak >= 30 ? "text-orange-500 drop-shadow-[0_0_8px_rgba(249,115,22,0.9)]" :
+    streak >= 14 ? "text-orange-500 drop-shadow-[0_0_6px_rgba(249,115,22,0.7)]" :
+    streak >= 7  ? "text-orange-400 drop-shadow-[0_0_4px_rgba(251,146,60,0.6)]" :
+    streak >= 3  ? "text-orange-400" : "text-amber-400";
+
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 select-none">
+      <span className={`text-lg leading-none ${glowClass}`}>
+        {"🔥".repeat(flameCount)}
+      </span>
+      <div className="leading-tight">
+        <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{streak}</span>
+        <span className="text-xs text-orange-500/80 dark:text-orange-500/60 ml-1">ngày</span>
+      </div>
+    </div>
+  );
+}
+
 function AudioWaveform() {
   return (
     <div className="flex items-end gap-1 h-8">
@@ -110,6 +141,8 @@ type Props = {
   defaultLang: string;
   userId: string;
   hasPlacementTest: boolean;
+  enStreak?: number;
+  thStreak?: number;
 };
 
 type LessonViewState = "list" | "browse" | "generating" | "learning" | "quiz" | "done" | "conversation" | "conversation-done";
@@ -127,7 +160,7 @@ const SCENARIOS: { id: string; label: string; icon: string; desc: string }[] = [
   { id: "directions", label: "Hỏi đường", icon: "🗺️", desc: "Tìm đường, địa điểm" },
 ];
 
-export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaultLang, userId, hasPlacementTest }: Props) {
+export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaultLang, userId, hasPlacementTest, enStreak = 0, thStreak = 0 }: Props) {
   const router = useRouter();
   const [lang, setLang] = useState<string>(defaultLang);
   const [lessonState, setLessonState] = useState<LessonViewState>("list");
@@ -369,9 +402,14 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
 
   // ── Lesson flow ───────────────────────────────────────────────
 
-  async function openLesson(type: string, language: string, level: string, dayId?: string, topic?: string, examType?: string) {
+  async function openLesson(type: string, language: string, level: string, dayId?: string, topic?: string, examType?: string, weekNumber?: number, totalWeeks?: number) {
     const examSuffix = examType && examType !== "general" ? `_${examType.toLowerCase()}` : "";
-    const key = topic ? `${type}_${language}_${level}_${topic}${examSuffix}` : `${type}_${language}_${level}`;
+    // Each roadmap day gets its own unique cache key to prevent content duplication
+    const key = dayId
+      ? `day_${dayId}`
+      : topic
+        ? `${type}_${language}_${level}_${topic}${examSuffix}`
+        : `${type}_${language}_${level}`;
     const cached = LESSON_CONTENT[key];
     setActiveDayId(dayId ?? null);
     // reset speech state
@@ -401,7 +439,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
       const res = await fetch("/api/lessons/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonType: type, language, level, topic, examType }),
+        body: JSON.stringify({ lessonType: type, language, level, topic, examType, weekNumber, totalWeeks, dayId }),
       });
       const data = await res.json();
       if (data.error) {
@@ -1041,7 +1079,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="sm" onClick={() => { stopAll(); setLessonState("list"); }}>← Quay lại</Button>
-          <Badge variant="outline">{activeLessonKey}</Badge>
+          <Badge variant="outline">{activeLessonKey.startsWith("day_") ? activeLesson?.title ?? activeLessonKey : activeLessonKey}</Badge>
         </div>
         <h2 className="text-xl font-bold">{activeLesson.title}</h2>
 
@@ -1493,6 +1531,8 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     { type: "conversation", label: "Giao tiếp", icon: "💬", desc: "Hội thoại AI theo tình huống" },
   ];
 
+  const currentStreak = lang === "english" ? enStreak : thStreak;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1500,7 +1540,8 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
           <h1 className="text-2xl font-bold">Bài học</h1>
           {roadmapSubtitle && <p className="text-muted-foreground mt-1">{roadmapSubtitle}</p>}
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <StreakFire streak={currentStreak} />
           {hasEn && (
             <Button size="sm" variant={lang === "english" ? "default" : "outline"}
               onClick={() => { setLang("english"); setLessonState("list"); }}
@@ -1524,7 +1565,25 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
       {hasAnyRoadmap ? (
         <CalendarView
           lessonDays={lessonDays}
-          onStartLesson={(type, language, level, dayId, examType) => openLesson(type, language, level, dayId, undefined, examType)}
+          onStartLesson={(type, language, level, dayId, examType, weekTheme, weekNumber, totalWeeks) => {
+            // Calculate progressive level: interpolate between currentLevel and targetLevel by week
+            const LEVEL_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"];
+            const roadmap = language === "english" ? enRoadmap : thRoadmap;
+            let progressiveLevel = level;
+            if (roadmap?.targetLevel && weekNumber && totalWeeks) {
+              const fromIdx = LEVEL_ORDER.indexOf(level);
+              const toIdx = LEVEL_ORDER.indexOf(roadmap.targetLevel);
+              if (fromIdx >= 0 && toIdx > fromIdx) {
+                const progress = weekNumber / totalWeeks;
+                const idx = Math.min(
+                  Math.floor(fromIdx + progress * (toIdx - fromIdx + 1)),
+                  toIdx
+                );
+                progressiveLevel = LEVEL_ORDER[idx] ?? level;
+              }
+            }
+            openLesson(type, language, progressiveLevel, dayId, weekTheme, examType);
+          }}
         />
       ) : (
         <Card>
