@@ -187,8 +187,8 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>("");
   // Listening lesson voice state
-  const [listeningVoiceA, setListeningVoiceA] = useState<string>("");
-  const [listeningVoiceB, setListeningVoiceB] = useState<string>("");
+  // Up to 4 speaker voices (index 0-3)
+  const [listeningVoices, setListeningVoices] = useState<string[]>(["", "", "", ""]);
   const [playingLineIdx, setPlayingLineIdx] = useState<number>(-1);
 
   useEffect(() => {
@@ -280,11 +280,31 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     window.speechSynthesis.speak(utt);
   }
 
+  /**
+   * Normalise a transcript that the AI returned as one flat paragraph.
+   * Splits on "SpeakerName: " after sentence-ending punctuation so each
+   * turn lands on its own line.  If the text already has newlines, returns as-is.
+   *
+   * "Welcome. John: Hello. Emily: Hi there?" →
+   * "Welcome.\nJohn: Hello.\nEmily: Hi there?"
+   */
+  function normalizeTranscript(raw: string): string {
+    if (!raw) return raw;
+    const meaningful = raw.split("\n").filter((l) => l.trim()).length;
+    if (meaningful > 2) return raw; // already multi-line — no change needed
+
+    // Insert \n before every "SpeakerName: " that follows sentence-ending punctuation
+    return raw
+      .replace(/([.!?])\s+(?=[A-Z][a-zA-Z]{0,25}:\s)/g, "$1\n")
+      .trim();
+  }
+
   // Parse transcript into per-speaker lines: "A: Hello" → { speaker: "A", text: "Hello" }
   // Only ASCII speaker labels (A, B, Narrator, Man, Woman…) — prevents Vietnamese annotation
   // lines like "Ghi chú: ..." or "(Dịch: ...)" being misread as dialogue
   function parseTranscriptLines(transcript: string): { speaker: string; text: string }[] {
-    return transcript
+    const normalised = normalizeTranscript(transcript);
+    return normalised
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean)
@@ -338,9 +358,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
       const utt = new SpeechSynthesisUtterance(text);
       utt.lang = getTTSLang();
 
-      // Speaker 0 → voiceA, Speaker 1 → voiceB, others → voiceA
+      // Map speaker index to assigned voice (wraps if >4 speakers)
       const speakerIdx = speakers.indexOf(speaker);
-      const voiceURI = speakerIdx === 1 ? listeningVoiceB : listeningVoiceA;
+      const voiceURI = listeningVoices[speakerIdx] ?? listeningVoices[0] ?? "";
       const picked = voices.find((v) => v.voiceURI === voiceURI) ?? defaultVoice;
       if (picked) utt.voice = picked;
 
@@ -432,6 +452,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     setActiveLessonType(type);
     setActiveLessonLevel(level);
     setLessonContentHidden(false);
+    setListeningVoices(["", "", "", ""]);
     // reset speech state
     setAudioRevealed(false);
     setIsPlayingAudio(false);
@@ -1307,48 +1328,71 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
               <CardContent className="space-y-4">
 
                 {/* ── Voice selectors — always visible ── */}
-                {langVoices.length > 0 && (
-                  <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Chọn giọng đọc</p>
-                    {isDialogue ? (
-                      <div className="grid grid-cols-2 gap-2">
-                        {speakers.slice(0, 2).map((spk, si) => (
-                          <div key={spk} className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`w-4 h-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center shrink-0 ${SPEAKER_COLORS[si]}`}>
-                                {spk[0]}
-                              </span>
-                              <span className="text-xs text-muted-foreground font-medium">{spk}</span>
+                {langVoices.length > 0 && (() => {
+                  // Auto-assign distinct default voices on first render (spread available voices across speakers)
+                  const activeSpeakers = isDialogue ? speakers.slice(0, 4) : speakers.slice(0, 1);
+                  const allUnset = listeningVoices.every(v => v === "");
+                  if (allUnset && langVoices.length >= 1 && activeSpeakers.length > 0) {
+                    // Spread available voices: if 3 speakers and 5 voices, assign voices 0,1,2
+                    const defaults = activeSpeakers.map((_, i) => langVoices[i % langVoices.length]?.voiceURI ?? "");
+                    if (defaults.some(d => d !== "")) {
+                      setTimeout(() => setListeningVoices(prev => {
+                        const next = [...prev];
+                        defaults.forEach((v, i) => { if (next[i] === "") next[i] = v; });
+                        return next;
+                      }), 0);
+                    }
+                  }
+
+                  return (
+                    <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        Chọn giọng đọc {isDialogue ? `(${activeSpeakers.length} người)` : ""}
+                      </p>
+                      {isDialogue ? (
+                        <div className={`grid gap-2 ${activeSpeakers.length <= 2 ? "grid-cols-2" : "grid-cols-2 md:grid-cols-4"}`}>
+                          {activeSpeakers.map((spk, si) => (
+                            <div key={spk} className="space-y-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`w-4 h-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center shrink-0 ${SPEAKER_COLORS[si] ?? "bg-gray-500"}`}>
+                                  {spk[0]}
+                                </span>
+                                <span className="text-xs text-muted-foreground font-medium truncate">{spk}</span>
+                              </div>
+                              <select
+                                value={listeningVoices[si] ?? ""}
+                                onChange={(e) => setListeningVoices(prev => {
+                                  const next = [...prev];
+                                  next[si] = e.target.value;
+                                  return next;
+                                })}
+                                disabled={isPlayingAudio}
+                                className="w-full text-xs rounded border bg-background px-2 py-1 disabled:opacity-50"
+                              >
+                                <option value="">Giọng mặc định</option>
+                                {langVoices.map((v) => (
+                                  <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
+                                ))}
+                              </select>
                             </div>
-                            <select
-                              value={si === 0 ? listeningVoiceA : listeningVoiceB}
-                              onChange={(e) => si === 0 ? setListeningVoiceA(e.target.value) : setListeningVoiceB(e.target.value)}
-                              disabled={isPlayingAudio}
-                              className="w-full text-xs rounded border bg-background px-2 py-1 disabled:opacity-50"
-                            >
-                              <option value="">Giọng mặc định</option>
-                              {langVoices.map((v) => (
-                                <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <select
-                        value={listeningVoiceA}
-                        onChange={(e) => setListeningVoiceA(e.target.value)}
-                        disabled={isPlayingAudio}
-                        className="w-full text-xs rounded border bg-background px-2 py-1 disabled:opacity-50"
-                      >
-                        <option value="">Giọng mặc định</option>
-                        {langVoices.map((v) => (
-                          <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                )}
+                          ))}
+                        </div>
+                      ) : (
+                        <select
+                          value={listeningVoices[0] ?? ""}
+                          onChange={(e) => setListeningVoices(prev => { const next = [...prev]; next[0] = e.target.value; return next; })}
+                          disabled={isPlayingAudio}
+                          className="w-full text-xs rounded border bg-background px-2 py-1 disabled:opacity-50"
+                        >
+                          <option value="">Giọng mặc định</option>
+                          {langVoices.map((v) => (
+                            <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* ── Playback controls — always visible ── */}
                 {isPlayingAudio ? (

@@ -141,13 +141,14 @@ YÊU CẦU: vocab_highlight có 4-5 từ quan trọng từ đoạn văn. Quiz 6 
     listening: `{
   "title": "string — tên bài nghe cụ thể",
   "context": "string — mô tả tình huống bằng tiếng Việt (ai đang nói, ở đâu, về chủ đề gì)",
-  "transcript": "string — hội thoại hoặc độc thoại mô phỏng bài nghe, viết đầy đủ theo format 'A: ... / B: ...' hoặc 'Narrator: ...', dài ít nhất 150 từ, tự nhiên như tiếng nói thật",
+  "transcript": "string — CRITICAL FORMAT: each speaker turn MUST be on its own line separated by \\n. Use real speaker names (John, Emily, Manager, etc.) not just A/B. Example value: 'John: Good morning, everyone.\\nEmily: Good morning! Are we ready to start?\\nJohn: Yes, let us begin with the agenda.\\nDavid: I have a quick question first.' — minimum 150 words total, natural spoken English/Thai only, NO Vietnamese inside transcript",
   "key_phrases": [
     { "phrase": "string — cụm từ quan trọng trong transcript", "meaning": "string — nghĩa tiếng Việt" }
   ],
   "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
 }
-YÊU CẦU: key_phrases có 4-5 cụm. Quiz 6 câu kiểm tra nội dung nghe: ý chính, chi tiết cụ thể, từ vựng, thái độ/mục đích người nói.`,
+TRANSCRIPT REQUIREMENT: The transcript MUST use \\n to separate each speaker turn — never write all turns as one continuous paragraph. If there are 3 speakers (John, Emily, David), the UI will automatically assign each a different voice. Minimum 8 speaker turns for dialogue, minimum 150 words.
+key_phrases: 4-5 cụm quan trọng từ transcript.`,
 
     writing: `{
   "title": "string — tên bài viết cụ thể",
