@@ -588,6 +588,24 @@ function RoadmapCard({ roadmap }: { roadmap: Roadmap }) {
   const daysLeft = differenceInDays(new Date(roadmap.targetDate), new Date());
   const currentWeek = roadmap.weeks.find((w) => w.status === "active") ?? roadmap.weeks[0];
 
+  // Score-aware from/to labels for the progress bar
+  const TOEIC_MIN: Record<string, number> = { A1: 10, A2: 255, B1: 550, B2: 785, C1: 990 };
+  const IELTS_MIN: Record<string, number> = { A1: 10, A2: 30, B1: 40, B2: 55, C1: 70, C2: 80 };
+  const exam = roadmap.targetExam ?? "general";
+  const tScore = roadmap.targetScore;
+  let fromLabel: string;
+  let toLabel: string;
+  if (exam === "TOEIC" && tScore) {
+    fromLabel = String(TOEIC_MIN[roadmap.currentLevel] ?? roadmap.currentLevel);
+    toLabel = String(tScore);
+  } else if (exam === "IELTS" && tScore) {
+    fromLabel = ((IELTS_MIN[roadmap.currentLevel] ?? 0) / 10).toFixed(1);
+    toLabel = (tScore / 10).toFixed(1);
+  } else {
+    fromLabel = roadmap.currentLevel;
+    toLabel = roadmap.targetLevel;
+  }
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -628,11 +646,11 @@ function RoadmapCard({ roadmap }: { roadmap: Roadmap }) {
       <CardContent className="space-y-4">
         {/* Level journey */}
         <div className="flex items-center gap-3">
-          <Badge variant="outline" className="shrink-0">{roadmap.currentLevel}</Badge>
+          <Badge variant="outline" className="shrink-0">{fromLabel}</Badge>
           <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
             <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${progress}%` }} />
           </div>
-          <Badge className="shrink-0">{roadmap.targetLevel}</Badge>
+          <Badge className="shrink-0">{toLabel}</Badge>
         </div>
 
         <div className="flex items-center justify-between text-sm">

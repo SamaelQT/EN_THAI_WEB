@@ -1011,6 +1011,12 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
   // ── Quiz screen ───────────────────────────────────────────────
   if (lessonState === "quiz" && activeLesson) {
     const q = activeLesson.quiz[quizIndex];
+
+    // Strip leading letter/number labels the AI sometimes embeds: "A) text", "A. text", "1) text"
+    function cleanOption(opt: string): string {
+      return opt.replace(/^[A-Da-d1-4][.)]\s*/u, "").trim();
+    }
+
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
@@ -1023,25 +1029,27 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
             <p className="font-medium text-lg mb-6">{q.q}</p>
             <div className="grid gap-3">
               {q.options.map((opt: string, i: number) => {
+                const label = String.fromCharCode(65 + i);
+                const text = cleanOption(opt);
                 let cls = "w-full text-left justify-start h-auto py-3 px-4 font-normal border rounded-lg transition-colors ";
                 if (quizSelected !== null) {
-                  if (i === q.answer) cls += "border-green-500 bg-green-50 text-green-800";
-                  else if (i === quizSelected) cls += "border-red-400 bg-red-50 text-red-800";
-                  else cls += "opacity-50";
+                  if (i === q.answer) cls += "border-green-500 bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200";
+                  else if (i === quizSelected) cls += "border-red-400 bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200";
+                  else cls += "opacity-40";
                 } else {
                   cls += "hover:bg-muted cursor-pointer";
                 }
                 return (
                   <div key={i} className={cls} onClick={() => answerQuiz(i)}>
-                    <span className="mr-3 font-semibold text-muted-foreground">{String.fromCharCode(65 + i)}.</span>
-                    {opt}
+                    <span className="mr-3 font-bold text-muted-foreground">{label}.</span>
+                    {text}
                   </div>
                 );
               })}
             </div>
             {quizSelected !== null && (
-              <div className={`mt-4 p-3 rounded-lg text-sm ${quizSelected === q.answer ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-                {quizSelected === q.answer ? "✓ Chính xác!" : `✗ Đáp án đúng: ${q.options[q.answer]}`}
+              <div className={`mt-4 p-3 rounded-lg text-sm ${quizSelected === q.answer ? "bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300" : "bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300"}`}>
+                {quizSelected === q.answer ? "✓ Chính xác!" : `✗ Đáp án đúng: ${cleanOption(q.options[q.answer])}`}
               </div>
             )}
           </CardContent>

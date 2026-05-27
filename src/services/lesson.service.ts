@@ -13,11 +13,15 @@ Rules:
 - Content depth must be sufficient that a learner genuinely understands the topic after studying
 
 CRITICAL QUIZ LANGUAGE RULES (strictly enforced):
-- The "q" (question) field is always in Vietnamese
-- For "meaning" questions (hỏi nghĩa của từ): options must be Vietnamese ONLY (e.g. ["Tài khoản", "Hóa đơn", "Hợp đồng", "Phòng ban"])
-- For ALL OTHER question types (fill-in-blank, error correction, grammar, usage): options must be English or Thai ONLY — NEVER mix Vietnamese into these options
-- FORBIDDEN: options like "go / đi", "went (quá khứ)", "He goes (sai)", "A. correct B. sai" — pick ONE language per option, never add a slash translation
-- Each option must be a clean word, phrase, or sentence in exactly one language
+- The "q" (question) field is ALWAYS in Vietnamese
+- For "meaning/translation" questions ONLY (hỏi "X có nghĩa là gì?"): options in Vietnamese (e.g. ["Tài khoản", "Hóa đơn", "Hợp đồng", "Phòng ban"])
+- For ALL OTHER question types — fill-in-blank, grammar, error correction, comprehension, context usage: options MUST be in English or Thai ONLY
+  - Comprehension: options are English/Thai phrases from or about the passage (e.g. "via email", "through a website notice")
+  - Fill-in-blank: options are English/Thai verb forms or words (e.g. "goes", "went", "has gone", "is going")
+  - Error correction: options are complete English/Thai sentences
+- NEVER write options with a slash translation: "go / đi", "via email / qua email", "correct / đúng" → FORBIDDEN
+- NEVER prefix options with letters inside the text: never write "A) via email" — the UI adds letters automatically
+- Each option is a clean word, phrase, or sentence in exactly ONE language, no parenthetical notes
 
 CRITICAL TRANSCRIPT RULE:
 - The "transcript" field must contain ONLY English or Thai text — NO Vietnamese translations or annotations inside the transcript
@@ -50,12 +54,19 @@ function buildPrompt({ lessonType, language, level, topic, examType, weekNumber,
   };
   const examNote = examType && examContext[examType] ? `\nBỐI CẢNH THI: ${examContext[examType]}\n` : "";
 
-  const quizRequirements = `Quiz phải có ĐÚNG 6 câu hỏi, bao gồm các dạng đa dạng:
-- 2 câu điền vào chỗ trống: đáp án là các dạng tiếng Anh/Thái (VD: "goes / go / went / going")
-- 2 câu chọn nghĩa: đáp án là các nghĩa tiếng VIỆT (VD: "Tài khoản / Hóa đơn / Lương / Hợp đồng")
-- 1 câu phát hiện lỗi sai: đáp án là các câu/cụm tiếng Anh/Thái nguyên bản
-- 1 câu vận dụng tình huống: đáp án là các câu/cụm tiếng Anh/Thái nguyên bản
-Mỗi câu có đúng 4 lựa chọn. Câu hỏi viết bằng tiếng Việt. TUYỆT ĐỐI không trộn tiếng Việt vào đáp án tiếng Anh/Thái (không dùng dấu / để dịch trong đáp án).`;
+  const quizRequirements = `Quiz phải có ĐÚNG 6 câu hỏi, mỗi câu 4 lựa chọn, chỉ 1 đáp án đúng. Câu hỏi (q) LUÔN bằng tiếng Việt.
+
+Phân bổ dạng câu và ngôn ngữ đáp án:
+- 2 câu điền vào chỗ trống → options tiếng Anh/Thái (VD: ["goes", "go", "went", "going"])
+- 1 câu chọn nghĩa từ (hỏi "X có nghĩa là gì?") → options tiếng VIỆT (VD: ["Tài khoản", "Hóa đơn", "Lương", "Hợp đồng"])
+- 1 câu hiểu nội dung (comprehension) → options tiếng Anh/Thái phản ánh nội dung bài (VD: ["via email", "by phone", "on the website", "in person"])
+- 1 câu phát hiện lỗi sai → options là các câu/cụm tiếng Anh/Thái
+- 1 câu vận dụng tình huống → options là các câu/cụm tiếng Anh/Thái
+
+TUYỆT ĐỐI CẤM:
+- Trộn tiếng Việt vào options tiếng Anh/Thái: "go / đi", "via email / qua email"
+- Thêm chú thích: "went (quá khứ)", "He goes (sai)"
+- Thêm ký tự A) B) C) D) vào trong text của options — UI tự thêm nhãn`;
 
   const schemas: Record<string, string> = {
     vocabulary: `{

@@ -225,6 +225,27 @@ function RoadmapWidget({
   const progress = Math.round((completedWeeks / roadmap.totalWeeks) * 100);
   const activeWeek = roadmap.weeks.find((w: any) => w.status === "active");
 
+  // TOEIC min score per CEFR level (for "from" label)
+  const TOEIC_MIN: Record<string, number> = { A1: 10, A2: 255, B1: 550, B2: 785, C1: 990 };
+  // IELTS min band ×10 per CEFR level
+  const IELTS_MIN: Record<string, number> = { A1: 10, A2: 30, B1: 40, B2: 55, C1: 70, C2: 80 };
+
+  const exam: string = roadmap.targetExam ?? "general";
+  const targetScore: number | null = roadmap.targetScore ?? null;
+
+  // Build the "from → to" progress label based on exam type
+  let progressLabel: string;
+  if (exam === "TOEIC" && targetScore) {
+    const fromScore = TOEIC_MIN[roadmap.currentLevel] ?? roadmap.currentLevel;
+    progressLabel = `TOEIC ${fromScore} → ${targetScore}`;
+  } else if (exam === "IELTS" && targetScore) {
+    const fromBand = (IELTS_MIN[roadmap.currentLevel] ?? 0) / 10;
+    const toBand = targetScore / 10;
+    progressLabel = `IELTS ${fromBand.toFixed(1)} → ${toBand.toFixed(1)}`;
+  } else {
+    progressLabel = `${roadmap.currentLevel} → ${roadmap.targetLevel}`;
+  }
+
   return (
     <Card>
       <CardContent className="pt-5 space-y-3">
@@ -252,7 +273,7 @@ function RoadmapWidget({
 
         <div>
           <div className="flex justify-between text-xs text-muted-foreground mb-1">
-            <span>{roadmap.currentLevel} → {roadmap.targetLevel}</span>
+            <span>{progressLabel}</span>
             <span>{progress}%</span>
           </div>
           <Progress value={progress} className="h-2" />
