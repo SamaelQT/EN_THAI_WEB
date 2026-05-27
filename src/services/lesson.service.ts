@@ -4,29 +4,27 @@ import Groq from "groq-sdk";
 
 const SYSTEM_PROMPT = `You are an expert language teacher creating structured lessons for Vietnamese learners studying English or Thai.
 Output ONLY valid JSON — no markdown wrapper, no extra text before or after.
-Rules:
-- All explanations, instructions, and question text must be in Vietnamese
-- All example sentences and phrases must include Vietnamese translations
-- Examples must be complete, natural sentences — never fragments
-- Grammar explanations must be thorough: cover usage cases, sentence structures, signal words, and common mistakes
-- Quiz must have exactly 6 questions with diverse question types (fill-in-blank, meaning, error correction, context usage)
-- Content depth must be sufficient that a learner genuinely understands the topic after studying
 
-CRITICAL QUIZ LANGUAGE RULES (strictly enforced):
-- The "q" (question) field is ALWAYS in Vietnamese
-- For "meaning/translation" questions ONLY (hỏi "X có nghĩa là gì?"): options in Vietnamese (e.g. ["Tài khoản", "Hóa đơn", "Hợp đồng", "Phòng ban"])
-- For ALL OTHER question types — fill-in-blank, grammar, error correction, comprehension, context usage: options MUST be in English or Thai ONLY
-  - Comprehension: options are English/Thai phrases from or about the passage (e.g. "via email", "through a website notice")
-  - Fill-in-blank: options are English/Thai verb forms or words (e.g. "goes", "went", "has gone", "is going")
-  - Error correction: options are complete English/Thai sentences
-- NEVER write options with a slash translation: "go / đi", "via email / qua email", "correct / đúng" → FORBIDDEN
-- NEVER prefix options with letters inside the text: never write "A) via email" — the UI adds letters automatically
-- Each option is a clean word, phrase, or sentence in exactly ONE language, no parenthetical notes
+LANGUAGE RULES:
+- Lesson body (explanations, grammar notes, tips): Vietnamese — learners need L1 support to understand
+- Quiz questions ("q" field) and options: IN THE TARGET LANGUAGE (English or Thai) — the quiz IS the practice
+- Exception: vocabulary "meaning" quiz questions ask for Vietnamese translation → options in Vietnamese
+- All example sentences must include Vietnamese translation alongside
 
-CRITICAL TRANSCRIPT RULE:
-- The "transcript" field must contain ONLY English or Thai text — NO Vietnamese translations or annotations inside the transcript
-- Write natural spoken dialogue or narration in the target language only
-- Vietnamese context belongs ONLY in the "context" field, not inside the transcript`;
+QUIZ RULES — THE QUIZ MUST FEEL LIKE A REAL ENGLISH/THAI TEST, NOT A VIETNAMESE TEST:
+- For grammar lessons: ALL 6 questions written in English, testing ONLY the grammar point of this lesson
+- For vocabulary lessons: 5 questions in English testing word usage, 1 question asking Vietnamese meaning
+- For reading/listening: questions can be Vietnamese (comprehension), options in English/Thai
+- NEVER put random unrelated topics in quiz — every question must test the exact lesson content
+- NEVER prefix options with A) B) C) D) — UI adds labels automatically
+- NEVER mix Vietnamese and English in same option: "go / đi", "went (quá khứ)" → FORBIDDEN
+- Each option is a clean word/phrase/sentence in exactly one language
+
+GRAMMAR TITLE RULE: Always use the English grammar term first, Vietnamese in parentheses.
+Examples: "Simple Future Tense (Thì Tương Lai Đơn)", "Present Perfect (Thì Hiện Tại Hoàn Thành)", "Passive Voice (Câu Bị Động)"
+
+TRANSCRIPT RULE: The "transcript" field must contain ONLY English or Thai — no Vietnamese inside it.`;
+
 
 type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string; examType?: string; weekNumber?: number; totalWeeks?: number; dayId?: string };
 
@@ -54,23 +52,59 @@ function buildPrompt({ lessonType, language, level, topic, examType, weekNumber,
   };
   const examNote = examType && examContext[examType] ? `\nBỐI CẢNH THI: ${examContext[examType]}\n` : "";
 
-  const quizRequirements = `Quiz phải có ĐÚNG 6 câu hỏi, mỗi câu 4 lựa chọn, chỉ 1 đáp án đúng. Câu hỏi (q) LUÔN bằng tiếng Việt.
+  // Per-lesson-type quiz specification
+  const quizSpecs: Record<string, string> = {
+    grammar: `GRAMMAR QUIZ — 6 questions, ALL written in English, testing ONLY the grammar point "${topic ?? "this lesson"}":
+- Q1: Fill-in-blank: "She ___ (go) to the meeting tomorrow." → 4 verb form options in English
+- Q2: Fill-in-blank: another sentence using the same grammar point → 4 English options
+- Q3: "Which sentence is grammatically correct?" → 4 complete English sentences (only 1 correct)
+- Q4: "Identify the error: [incorrect English sentence]" → 4 corrected English sentences (1 correct)
+- Q5: "Choose the sentence that expresses [usage case of this grammar]" → 4 English sentences
+- Q6: "Which sentence correctly uses [grammar point] in a real-life situation?" → 4 English sentences
+ALL questions and options in English. Zero Vietnamese in questions or options.`,
 
-Phân bổ dạng câu và ngôn ngữ đáp án:
-- 2 câu điền vào chỗ trống → options tiếng Anh/Thái (VD: ["goes", "go", "went", "going"])
-- 1 câu chọn nghĩa từ (hỏi "X có nghĩa là gì?") → options tiếng VIỆT (VD: ["Tài khoản", "Hóa đơn", "Lương", "Hợp đồng"])
-- 1 câu hiểu nội dung (comprehension) → options tiếng Anh/Thái phản ánh nội dung bài (VD: ["via email", "by phone", "on the website", "in person"])
-- 1 câu phát hiện lỗi sai → options là các câu/cụm tiếng Anh/Thái
-- 1 câu vận dụng tình huống → options là các câu/cụm tiếng Anh/Thái
+    vocabulary: `VOCABULARY QUIZ — 6 questions testing the 10 words from this lesson:
+- Q1-Q3: Fill-in-blank in English: "The accountant prepared the ___ for the client." → 4 English word options from lesson vocabulary
+- Q4-Q5: "Which sentence uses [word] correctly?" → 4 complete English sentences
+- Q6: "What does '[word from lesson]' mean?" → 4 Vietnamese meaning options (this is the ONLY Vietnamese question)
+Questions Q1-Q5 written in English. Q6 written in English too, only options in Vietnamese.`,
 
-TUYỆT ĐỐI CẤM:
-- Trộn tiếng Việt vào options tiếng Anh/Thái: "go / đi", "via email / qua email"
-- Thêm chú thích: "went (quá khứ)", "He goes (sai)"
-- Thêm ký tự A) B) C) D) vào trong text của options — UI tự thêm nhãn`;
+    reading: `READING QUIZ — 6 questions about the passage content:
+- Q1-Q3: Comprehension questions in Vietnamese asking about passage content → options in English (phrases/sentences from or about the passage)
+- Q4: Vocabulary question in English: "In the passage, '[word]' most likely means..." → 4 English options
+- Q5: Inference question in Vietnamese → options in English sentences
+- Q6: Main idea question in Vietnamese → options in English phrases`,
+
+    listening: `LISTENING QUIZ — 6 questions about the transcript:
+- Q1-Q3: Comprehension questions in Vietnamese → options in English (words/phrases from the transcript)
+- Q4: "What does '[speaker]' say about...?" (Vietnamese question) → options in English
+- Q5: Vocabulary/phrase question in English from key_phrases → 4 English options
+- Q6: Purpose/tone question in Vietnamese → options in English phrases`,
+
+    speaking: `SPEAKING QUIZ — 6 questions in English testing the phrases from this lesson:
+- Q1-Q2: "Which phrase is most appropriate when [situation]?" → 4 English phrase options
+- Q3-Q4: Fill-in-blank with the correct phrase from the lesson → 4 English options
+- Q5: "What does '[phrase from lesson]' mean?" → 4 Vietnamese options
+- Q6: "In which situation would you use '[phrase]'?" → 4 English situational options`,
+
+    writing: `WRITING QUIZ — 6 questions about writing skills:
+- Q1-Q3: Questions in English testing sentence structure and vocabulary from this lesson → English options
+- Q4: Fill-in-blank with correct linking word/phrase → English options
+- Q5: "Which paragraph structure is correct for this writing type?" → English options
+- Q6: "What does '[useful phrase]' mean?" → 4 Vietnamese options`,
+
+    review: `REVIEW QUIZ — 6 mixed questions in English reviewing the week's grammar and vocabulary:
+- Q1-Q2: Grammar fill-in-blank in English → English options
+- Q3-Q4: Vocabulary usage in English sentences → English options
+- Q5: "Which sentence uses [this week's grammar] correctly?" → English options
+- Q6: "What does '[vocabulary word]' mean?" → Vietnamese meaning options`,
+  };
+
+  const quizRequirements = quizSpecs[lessonType] ?? quizSpecs.vocabulary;
 
   const schemas: Record<string, string> = {
     vocabulary: `{
-  "title": "string — tên bài học cụ thể, phải nhắc rõ chủ đề (vd: 'Từ vựng Tài chính & Ngân hàng')",
+  "title": "string — English topic name + Vietnamese (e.g. 'Finance & Banking Vocabulary (Từ vựng Tài chính & Ngân hàng)', 'Office Equipment (Từ vựng Đồ dùng Văn phòng)')",
   "words": [
     {
       "word": "string — từ gốc",
@@ -89,7 +123,7 @@ YÊU CẦU words: Tạo ĐÚNG 10 từ vựng thuộc CHỦ ĐỀ "${topic ?? "c
 - ${weekNumber ? `Đây là tuần ${weekNumber} — chọn từ khó hơn so với tuần đầu, không trùng lặp với từ vựng cơ bản đã học` : ""}`,
 
     grammar: `{
-  "title": "string — tên bài học cụ thể (vd: 'Thì Hiện Tại Hoàn Thành')",
+  "title": "string — English grammar term first, Vietnamese in parentheses (e.g. 'Simple Future Tense (Thì Tương Lai Đơn)', 'Present Perfect (Thì Hiện Tại Hoàn Thành)', 'Passive Voice (Câu Bị Động)')",
   "explanation": "string — giải thích ngữ pháp chi tiết BẰNG TIẾNG VIỆT theo cấu trúc markdown sau:\n## 1. Khi nào dùng?\n(Liệt kê 3-4 trường hợp sử dụng chính, mỗi trường hợp có 1 câu ví dụ kèm dịch nghĩa)\n\n## 2. Cấu trúc câu\n| Loại câu | Công thức | Ví dụ | Dịch nghĩa |\n|----------|-----------|-------|-----------|\n(Tạo bảng đầy đủ: Khẳng định / Phủ định / Câu hỏi Yes-No / Câu hỏi Wh-)\n\n## 3. Từ/dấu hiệu nhận biết\n(Liệt kê 5-7 signal words thường gặp, mỗi cái có 1 ví dụ ngắn + dịch)\n\n## 4. Ví dụ tình huống thực tế\n(Viết 4 câu ví dụ đa dạng tình huống, in đậm phần ngữ pháp trọng tâm, kèm dịch nghĩa tiếng Việt)\n\n## 5. Lỗi thường gặp ❌→✅\n(Liệt kê 3 lỗi sai phổ biến, mỗi lỗi: câu sai → câu đúng → giải thích ngắn)",
   "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
 }`,
@@ -169,17 +203,20 @@ YÊU CẦU: words có 8 từ quan trọng nhất của chủ đề tuần. Quiz 
     }
   }
 
-  return `Tạo một bài học ${lessonType} ${langLabel} cho trình độ ${level} (khung CEFR).
+  return `Create a ${lessonType} lesson in ${langLabel} for CEFR level ${level}.
 ${topicLine}${weekContext}${examNote}
+=== QUIZ SPECIFICATION (follow exactly) ===
 ${quizRequirements}
 
-Yêu cầu chất lượng:
-- Mọi ví dụ phải là câu HOÀN CHỈNH, tự nhiên, có ngữ cảnh rõ ràng
-- Mọi câu tiếng Anh/Thái đều phải có dịch nghĩa tiếng Việt đi kèm
-- Nội dung phải ĐỦ ĐỘ SÂU: người học cảm thấy hiểu bài sau khi đọc xong
-- Độ khó phù hợp đúng trình độ ${level}
+=== CONTENT QUALITY ===
+- Every example sentence must be complete and natural, not a fragment
+- Every English/Thai sentence must have a Vietnamese translation alongside
+- Depth must be enough that the learner genuinely understands after one read
+- Difficulty must match level ${level} precisely
 
-Trả về JSON hợp lệ theo schema sau, KHÔNG có text thêm bên ngoài JSON:\n\n${schema}`;
+Return valid JSON matching the schema below. NO text outside the JSON object:
+
+${schema}`;
 }
 
 // ── Achievement rules ──────────────────────────────────────────────────────
