@@ -167,6 +167,8 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
   const [activeLesson, setActiveLesson] = useState<any>(null);
   const [activeLessonKey, setActiveLessonKey] = useState("");
   const [activeLessonLang, setActiveLessonLang] = useState<string>("english");
+  const [activeLessonType, setActiveLessonType] = useState<string>("vocabulary");
+  const [activeLessonLevel, setActiveLessonLevel] = useState<string>("A1");
   const [activeDayId, setActiveDayId] = useState<string | null>(null);
   const [lessonContentHidden, setLessonContentHidden] = useState(false);
 
@@ -427,6 +429,8 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     const cached = LESSON_CONTENT[key];
     setActiveDayId(dayId ?? null);
     setActiveLessonLang(language);
+    setActiveLessonType(type);
+    setActiveLessonLevel(level);
     setLessonContentHidden(false);
     // reset speech state
     setAudioRevealed(false);
@@ -512,12 +516,19 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     setLessonState("done");
 
     try {
-      const [lessonType, language, level] = activeLessonKey.split("_");
+      // Use stored state — activeLessonKey can be "day_<id>" so never parse it for type/lang/level
       const timeSpent = lessonStartTime > 0 ? Math.round((Date.now() - lessonStartTime) / 1000) : null;
       const res = await fetch("/api/lessons/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonType, language, level, score, timeSpent, dayId: activeDayId }),
+        body: JSON.stringify({
+          lessonType: activeLessonType,
+          language: activeLessonLang,
+          level: activeLessonLevel,
+          score,
+          timeSpent,
+          dayId: activeDayId,
+        }),
       });
       const data = await res.json();
       const xp = data.xpGained ?? (score >= 70 ? 15 : 8);
