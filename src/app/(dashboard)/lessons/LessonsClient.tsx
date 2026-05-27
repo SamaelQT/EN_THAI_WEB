@@ -166,7 +166,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
   const [lessonState, setLessonState] = useState<LessonViewState>("list");
   const [activeLesson, setActiveLesson] = useState<any>(null);
   const [activeLessonKey, setActiveLessonKey] = useState("");
+  const [activeLessonLang, setActiveLessonLang] = useState<string>("english");
   const [activeDayId, setActiveDayId] = useState<string | null>(null);
+  const [lessonContentHidden, setLessonContentHidden] = useState(false);
 
   // Free practice browse state
   const [browseType, setBrowseType] = useState<{ type: string; label: string; icon: string; desc: string } | null>(null);
@@ -253,7 +255,12 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
   // ── Speech helpers ────────────────────────────────────────────
 
   function getTTSLang() {
-    return activeLessonKey.includes("_thai_") ? "th-TH" : "en-US";
+    return activeLessonLang === "thai" ? "th-TH" : "en-US";
+  }
+
+  /** True if text is primarily Vietnamese (contains Vietnamese-specific diacritics) */
+  function isVietnamese(text: string): boolean {
+    return /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđĐ]/.test(text);
   }
 
   function speakWord(word: string, idx: number) {
@@ -272,13 +279,16 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
   }
 
   // Parse transcript into per-speaker lines: "A: Hello" → { speaker: "A", text: "Hello" }
+  // Only ASCII speaker labels (A, B, Narrator, Man, Woman…) — prevents Vietnamese annotation
+  // lines like "Ghi chú: ..." or "(Dịch: ...)" being misread as dialogue
   function parseTranscriptLines(transcript: string): { speaker: string; text: string }[] {
     return transcript
       .split("\n")
       .map((l) => l.trim())
       .filter(Boolean)
       .map((l) => {
-        const m = l.match(/^([A-Za-zÀ-ỹ][A-Za-zÀ-ỹ0-9 ]*?):\s+(.+)$/);
+        // Speaker label must be pure ASCII letters/digits/spaces, max 30 chars
+        const m = l.match(/^([A-Za-z][A-Za-z0-9 ]{0,29}):\s+(.+)$/);
         return m ? { speaker: m[1].trim(), text: m[2].trim() } : { speaker: "", text: l };
       });
   }
@@ -300,7 +310,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
     }
     window.speechSynthesis.cancel();
 
-    const lines = parseTranscriptLines(activeLesson.transcript);
+    const allLines = parseTranscriptLines(activeLesson.transcript);
+    // Only speak lines in the target language — skip Vietnamese annotations/translations
+    const lines = allLines.filter(({ text }) => !isVietnamese(text));
     const speakers = getTranscriptSpeakers(lines);
     const voices = window.speechSynthesis.getVoices();
     const ttsPrefix = getTTSLang().slice(0, 2);
@@ -317,7 +329,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
         setAudioRevealed(true);
         return;
       }
-      setPlayingLineIdx(idx);
+      // Map back to original line index for highlight sync
+      const originalIdx = allLines.indexOf(lines[idx]);
+      setPlayingLineIdx(originalIdx);
       const { speaker, text } = lines[idx];
       const utt = new SpeechSynthesisUtterance(text);
       utt.lang = getTTSLang();
@@ -412,6 +426,8 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
         : `${type}_${language}_${level}`;
     const cached = LESSON_CONTENT[key];
     setActiveDayId(dayId ?? null);
+    setActiveLessonLang(language);
+    setLessonContentHidden(false);
     // reset speech state
     setAudioRevealed(false);
     setIsPlayingAudio(false);
@@ -1072,19 +1088,32 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
 
   // ── Learning screen ───────────────────────────────────────────
   if (lessonState === "learning" && activeLesson) {
-    const isListeningLesson = activeLessonKey.startsWith("listening_");
+    const isListeningLesson = activeLessonKey.startsWith("listening_") || !!activeLesson.transcript;
     const quizLocked = isListeningLesson && !audioRevealed;
 
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="sm" onClick={() => { stopAll(); setLessonState("list"); }}>← Quay lại</Button>
-          <Badge variant="outline">{activeLessonKey.startsWith("day_") ? activeLesson?.title ?? activeLessonKey : activeLessonKey}</Badge>
+          <div className="flex items-center gap-2">
+            {/* Show/hide content toggle — especially useful for listening focus */}
+            <button
+              onClick={() => setLessonContentHidden((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border rounded-md px-2.5 py-1.5 transition-colors"
+              title={lessonContentHidden ? "Hiện nội dung bài học" : "Ẩn nội dung, tập trung nghe"}
+            >
+              {lessonContentHidden ? (
+                <><BookOpen size={13} /> Hiện nội dung</>
+              ) : (
+                <><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg> Ẩn nội dung</>
+              )}
+            </button>
+          </div>
         </div>
         <h2 className="text-xl font-bold">{activeLesson.title}</h2>
 
         {/* B1 – Vocabulary with TTS buttons */}
-        {activeLesson.words && (
+        {!lessonContentHidden && activeLesson.words && (
           <div className="grid gap-4">
             {activeLesson.words.map((w: any, i: number) => (
               <Card key={i}>
@@ -1120,7 +1149,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
         )}
 
         {/* Grammar lesson */}
-        {activeLesson.explanation && (
+        {!lessonContentHidden && activeLesson.explanation && (
           <Card>
             <CardContent className="pt-6 space-y-3">
               {(() => {
@@ -1221,7 +1250,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
         )}
 
         {/* Reading lesson */}
-        {activeLesson.passage && (
+        {!lessonContentHidden && activeLesson.passage && (
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-base">Đoạn văn</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -1244,12 +1273,11 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
 
         {/* Listening lesson */}
         {activeLesson.transcript && (() => {
+          // All lines for display; TTS-safe lines (no Vietnamese) are filtered inside playTranscript
           const lines = parseTranscriptLines(activeLesson.transcript);
           const speakers = getTranscriptSpeakers(lines);
           const isDialogue = speakers.length >= 2;
           const langVoices = availableVoices.filter((v) => v.lang.startsWith(getTTSLang().slice(0, 2)));
-
-          // Avatar colors per speaker
           const SPEAKER_COLORS = ["bg-blue-500", "bg-rose-500", "bg-emerald-500", "bg-amber-500"];
 
           return (
@@ -1259,7 +1287,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
               </CardHeader>
               <CardContent className="space-y-4">
 
-                {/* ── Voice selectors ── */}
+                {/* ── Voice selectors — always visible ── */}
                 {langVoices.length > 0 && (
                   <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Chọn giọng đọc</p>
@@ -1303,7 +1331,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
                   </div>
                 )}
 
-                {/* ── Playback controls ── */}
+                {/* ── Playback controls — always visible ── */}
                 {isPlayingAudio ? (
                   <div className="flex items-center gap-3 bg-primary/5 rounded-lg px-4 py-3">
                     <AudioWaveform />
@@ -1317,12 +1345,14 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
                     <Button onClick={playTranscript} size="lg" className="gap-2">
                       <PlayCircle size={20} /> Nghe đoạn hội thoại
                     </Button>
-                    <button
-                      onClick={() => setAudioRevealed(true)}
-                      className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-                    >
-                      Xem transcript
-                    </button>
+                    {!lessonContentHidden && (
+                      <button
+                        onClick={() => setAudioRevealed(true)}
+                        className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                      >
+                        Xem transcript ngay
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <Button onClick={playTranscript} size="sm" variant="outline" className="w-full gap-2">
@@ -1330,24 +1360,27 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
                   </Button>
                 )}
 
-                {/* ── Transcript lines ── */}
-                {(audioRevealed || isPlayingAudio) && (
+                {/* ── Transcript + key phrases — hidden when lessonContentHidden ── */}
+                {!lessonContentHidden && (audioRevealed || isPlayingAudio) && (
                   <div className={`rounded-lg border overflow-hidden ${isDialogue ? "divide-y" : "p-3 bg-muted/40"}`}>
                     {isDialogue ? (
                       lines.map((line, li) => {
                         const si = speakers.indexOf(line.speaker);
                         const isActive = playingLineIdx === li;
+                        const isVi = isVietnamese(line.text);
                         return (
                           <div
                             key={li}
-                            className={`flex gap-3 px-3 py-2.5 transition-colors ${isActive ? "bg-primary/10" : "bg-background"}`}
+                            className={`flex gap-3 px-3 py-2 transition-colors ${isActive ? "bg-primary/10" : isVi ? "bg-muted/30" : "bg-background"}`}
                           >
-                            <span className={`w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 ${SPEAKER_COLORS[si] ?? "bg-gray-400"}`}>
-                              {line.speaker ? line.speaker[0] : "?"}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[11px] font-semibold text-muted-foreground mb-0.5">{line.speaker}</p>
-                              <p className={`text-sm leading-relaxed ${isActive ? "text-primary font-medium" : ""}`}>
+                            {!isVi && (
+                              <span className={`w-6 h-6 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 ${SPEAKER_COLORS[si] ?? "bg-gray-400"}`}>
+                                {line.speaker ? line.speaker[0] : "·"}
+                              </span>
+                            )}
+                            <div className={`flex-1 min-w-0 ${isVi ? "pl-8" : ""}`}>
+                              {!isVi && <p className="text-[11px] font-semibold text-muted-foreground mb-0.5">{line.speaker}</p>}
+                              <p className={`text-sm leading-relaxed ${isActive ? "text-primary font-medium" : isVi ? "text-muted-foreground/70 italic text-xs" : ""}`}>
                                 {line.text}
                               </p>
                             </div>
@@ -1359,7 +1392,10 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
                       lines.map((line, li) => (
                         <p
                           key={li}
-                          className={`text-sm leading-relaxed transition-colors ${playingLineIdx === li ? "text-primary font-medium" : "text-foreground"}`}
+                          className={`text-sm leading-relaxed transition-colors ${
+                            playingLineIdx === li ? "text-primary font-medium" :
+                            isVietnamese(line.text) ? "text-muted-foreground/70 italic text-xs mt-0.5" : "text-foreground"
+                          }`}
                         >
                           {line.text}
                         </p>
@@ -1368,8 +1404,12 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
                   </div>
                 )}
 
-                {/* ── Key phrases ── */}
-                {activeLesson.key_phrases?.length > 0 && (
+                {/* Prompt to reveal transcript after listening */}
+                {!lessonContentHidden && !audioRevealed && !isPlayingAudio && (
+                  <p className="text-xs text-center text-muted-foreground">Nghe xong rồi xem transcript để kiểm tra ✓</p>
+                )}
+
+                {!lessonContentHidden && activeLesson.key_phrases?.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Cụm từ quan trọng</p>
                     <div className="space-y-1.5">
@@ -1389,7 +1429,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
         })()}
 
         {/* Writing lesson */}
-        {activeLesson.prompt && (
+        {!lessonContentHidden && activeLesson.prompt && (
           <div className="space-y-3">
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base">✏️ Đề bài</CardTitle></CardHeader>
@@ -1417,7 +1457,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
         )}
 
         {/* B3 – Speaking lesson with mic */}
-        {activeLesson.phrases && (
+        {!lessonContentHidden && activeLesson.phrases && (
           <div className="space-y-3">
             <div className="grid gap-3">
               {activeLesson.phrases.map((p: any, i: number) => {

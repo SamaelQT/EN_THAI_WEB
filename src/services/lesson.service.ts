@@ -10,7 +10,19 @@ Rules:
 - Examples must be complete, natural sentences — never fragments
 - Grammar explanations must be thorough: cover usage cases, sentence structures, signal words, and common mistakes
 - Quiz must have exactly 6 questions with diverse question types (fill-in-blank, meaning, error correction, context usage)
-- Content depth must be sufficient that a learner genuinely understands the topic after studying`;
+- Content depth must be sufficient that a learner genuinely understands the topic after studying
+
+CRITICAL QUIZ LANGUAGE RULES (strictly enforced):
+- The "q" (question) field is always in Vietnamese
+- For "meaning" questions (hỏi nghĩa của từ): options must be Vietnamese ONLY (e.g. ["Tài khoản", "Hóa đơn", "Hợp đồng", "Phòng ban"])
+- For ALL OTHER question types (fill-in-blank, error correction, grammar, usage): options must be English or Thai ONLY — NEVER mix Vietnamese into these options
+- FORBIDDEN: options like "go / đi", "went (quá khứ)", "He goes (sai)", "A. correct B. sai" — pick ONE language per option, never add a slash translation
+- Each option must be a clean word, phrase, or sentence in exactly one language
+
+CRITICAL TRANSCRIPT RULE:
+- The "transcript" field must contain ONLY English or Thai text — NO Vietnamese translations or annotations inside the transcript
+- Write natural spoken dialogue or narration in the target language only
+- Vietnamese context belongs ONLY in the "context" field, not inside the transcript`;
 
 type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string; examType?: string; weekNumber?: number; totalWeeks?: number; dayId?: string };
 
@@ -39,11 +51,11 @@ function buildPrompt({ lessonType, language, level, topic, examType, weekNumber,
   const examNote = examType && examContext[examType] ? `\nBỐI CẢNH THI: ${examContext[examType]}\n` : "";
 
   const quizRequirements = `Quiz phải có ĐÚNG 6 câu hỏi, bao gồm các dạng đa dạng:
-- 2 câu điền vào chỗ trống (choose the correct form)
-- 2 câu chọn nghĩa / ngữ cảnh phù hợp
-- 1 câu phát hiện lỗi sai (error correction)
-- 1 câu vận dụng tình huống thực tế
-Mỗi câu có đúng 4 lựa chọn (A/B/C/D), chỉ 1 đáp án đúng. Câu hỏi viết bằng tiếng Việt, đáp án có thể là tiếng Anh/Thái.`;
+- 2 câu điền vào chỗ trống: đáp án là các dạng tiếng Anh/Thái (VD: "goes / go / went / going")
+- 2 câu chọn nghĩa: đáp án là các nghĩa tiếng VIỆT (VD: "Tài khoản / Hóa đơn / Lương / Hợp đồng")
+- 1 câu phát hiện lỗi sai: đáp án là các câu/cụm tiếng Anh/Thái nguyên bản
+- 1 câu vận dụng tình huống: đáp án là các câu/cụm tiếng Anh/Thái nguyên bản
+Mỗi câu có đúng 4 lựa chọn. Câu hỏi viết bằng tiếng Việt. TUYỆT ĐỐI không trộn tiếng Việt vào đáp án tiếng Anh/Thái (không dùng dấu / để dịch trong đáp án).`;
 
   const schemas: Record<string, string> = {
     vocabulary: `{
