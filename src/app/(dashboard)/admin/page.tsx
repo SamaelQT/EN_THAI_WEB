@@ -90,6 +90,8 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
   const [extractingAnswerKey, setExtractingAnswerKey] = useState(false);
   const [extractingScript, setExtractingScript] = useState(false);
   const [scriptText, setScriptText] = useState("");
+  const [manualText, setManualText] = useState("");
+  const [showManualInput, setShowManualInput] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -102,10 +104,12 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
     setExtractingScript(true);
     try {
       const text = await extractPDFText(f);
+      if (!text.trim()) throw new Error("image-based");
       setScriptText(text);
       toast.success(`Đã đọc script: ${text.length.toLocaleString()} ký tự`);
     } catch {
-      toast.error("Không đọc được file Script");
+      setScriptFile(null);
+      toast.error("PDF Script là dạng scan — hãy dùng Google Drive OCR rồi paste vào ô Script bên dưới");
     } finally {
       setExtractingScript(false);
     }
@@ -126,16 +130,27 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
   }
 
   async function handleParse() {
-    if (!file) { toast.error("Chọn file PDF trước"); return; }
+    const hasManual = manualText.trim().length > 0;
+    if (!hasManual && !file) { toast.error("Chọn file PDF hoặc paste text trước"); return; }
     setResult(null);
+    let text = "";
     try {
-      // Step 1: extract text client-side
-      setStep("extracting");
-      setExtracting(true);
-      const text = await extractPDFText(file);
-      setExtracting(false);
+      if (hasManual) {
+        // Use manually pasted text directly
+        text = manualText;
+      } else {
+        // Step 1: extract text from PDF client-side
+        setStep("extracting");
+        setExtracting(true);
+        text = await extractPDFText(file!);
+        setExtracting(false);
 
-      if (!text.trim()) throw new Error("Không thể đọc text từ PDF này");
+        if (!text.trim()) {
+          // Image-based PDF → show manual input fallback
+          setShowManualInput(true);
+          throw new Error("PDF dạng scan (image-based) — không đọc được text trực tiếp.\n\nCách fix: mở PDF trong Google Drive → chuột phải → Mở bằng Google Tài liệu → Google tự OCR → copy toàn bộ text → paste vào ô \"Paste text thủ công\" bên dưới.");
+        }
+      }
 
       // Step 2: send text to AI
       setStep("ai");
@@ -143,7 +158,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
       const res = await fetch("/api/admin/parse-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, exam, source: source || file.name, answerKey, scriptText: scriptText || undefined }),
+        body: JSON.stringify({ text, exam, source: source || file?.name || "Manual", answerKey, scriptText: scriptText || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -235,7 +250,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
             onClick={() => fileRef.current?.click()}
           >
             <input ref={fileRef} type="file" accept=".pdf" className="hidden"
-              onChange={(e) => { setFile(e.target.files?.[0] ?? null); setStep("idle"); setResult(null); setScriptFile(null); setScriptText(""); }} />
+              onChange={(e) => { setFile(e.target.files?.[0] ?? null); setStep("idle"); setResult(null); setScriptFile(null); setScriptText(""); setManualText(""); setShowManualInput(false); }} />
             {file ? (
               <div className="flex items-center justify-center gap-2 text-green-700">
                 <CheckCircle size={18} />
@@ -247,6 +262,36 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
                 <FileText size={32} className="mx-auto mb-2 opacity-40" />
                 <p className="text-sm">Click để chọn file PDF</p>
                 <p className="text-xs mt-1">ETS 2024 Reading hoặc Listening (không cần chia trình độ)</p>
+              </div>
+            )}
+          </div>
+
+          {/* Manual text fallback (for image-based / scanned PDFs) */}
+          <div>
+            <button type="button" onClick={() => setShowManualInput(!showManualInput)}
+              className="text-xs text-muted-foreground hover:text-primary underline">
+              {showManualInput ? "▲ Ẩn" : "▼ Paste text thủ công"} (dành cho PDF dạng scan)
+            </button>
+            {showManualInput && (
+              <div className="mt-2 space-y-1.5">
+                <div className="text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-200 rounded-lg px-3 py-2 text-amber-800 dark:text-amber-300 space-y-1">
+                  <p className="font-medium">📋 Hướng dẫn OCR với Google Drive:</p>
+                  <ol className="list-decimal list-inside space-y-0.5 text-xs">
+                    <li>Upload PDF lên Google Drive</li>
+                    <li>Chuột phải → <strong>Mở bằng Google Tài liệu</strong></li>
+                    <li>Google tự OCR toàn bộ nội dung</li>
+                    <li>Ctrl+A → Ctrl+C → paste vào ô bên dưới</li>
+                  </ol>
+                </div>
+                <textarea
+                  className="w-full h-32 text-xs font-mono bg-muted/50 border rounded-lg p-3 resize-none"
+                  placeholder="Paste text đã OCR vào đây — sẽ được dùng thay vì đọc từ PDF..."
+                  value={manualText}
+                  onChange={(e) => setManualText(e.target.value)}
+                />
+                {manualText.trim() && (
+                  <p className="text-xs text-green-600">✓ {manualText.trim().length.toLocaleString()} ký tự — sẽ dùng text này thay vì PDF</p>
+                )}
               </div>
             )}
           </div>
@@ -270,9 +315,15 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleScriptPDF(f); }} />
             </div>
             {scriptFile && !extractingScript && (
-              <p className="text-xs text-green-600">
-                ✓ {scriptFile.name} — AI sẽ ghép transcript vào câu hỏi Part 3-4
-              </p>
+              <p className="text-xs text-green-600">✓ {scriptFile.name} — AI sẽ ghép transcript vào câu hỏi Part 3-4</p>
+            )}
+            {!scriptFile && (
+              <textarea
+                className="w-full h-16 text-xs font-mono bg-muted/50 border rounded-lg p-2 resize-none"
+                placeholder="Hoặc paste text transcript trực tiếp (nếu PDF scan)..."
+                value={scriptText}
+                onChange={(e) => setScriptText(e.target.value)}
+              />
             )}
           </div>
 
@@ -330,7 +381,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
             </div>
           )}
 
-          <Button onClick={handleParse} disabled={extracting || parsing || !file} className="w-full">
+          <Button onClick={handleParse} disabled={extracting || parsing || (!file && !manualText.trim())} className="w-full">
             <FileText size={16} className="mr-2" /> Trích xuất câu hỏi từ PDF
           </Button>
         </CardContent>
