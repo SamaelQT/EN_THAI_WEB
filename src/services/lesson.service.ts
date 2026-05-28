@@ -11,6 +11,16 @@ LANGUAGE RULES:
 - Exception: vocabulary "meaning" quiz questions ask for Vietnamese translation → options in Vietnamese
 - All example sentences must include Vietnamese translation alongside
 
+⚠️ CONTENT FIELDS LANGUAGE LOCK — THESE FIELDS MUST BE 100% ENGLISH OR THAI, ZERO VIETNAMESE:
+- "passage" (reading lesson): write the full reading text in English/Thai only — no Vietnamese words, no translations embedded, no parenthetical notes in Vietnamese inside the passage
+- "transcript" (listening lesson): spoken dialogue in English/Thai only — no Vietnamese inside
+- "example" (writing lesson): the sample essay/writing must be English/Thai only
+- "phrases[].phrase" (speaking lesson): the phrase itself must be English/Thai only
+- "words[].example" (vocabulary/review): the example sentence must be English/Thai only
+Vietnamese is ONLY allowed in: explanation, meaning, example_vi, guide, prompt, context, quiz question text (for comprehension Qs), and vocab_highlight[].meaning fields.
+VIOLATION EXAMPLE (FORBIDDEN): passage contains "Công ty (company) đã..." or "She works at công ty..."
+CORRECT: passage is entirely natural English prose with no Vietnamese anywhere inside it.
+
 QUIZ RULES — THE QUIZ MUST FEEL LIKE A REAL ENGLISH/THAI TEST, NOT A VIETNAMESE TEST:
 - For grammar lessons: ALL 6 questions written in English, testing ONLY the grammar point of this lesson
 - For vocabulary lessons: 5 questions in English testing word usage, 1 question asking Vietnamese meaning
@@ -69,7 +79,7 @@ ALL questions and options in English. Zero Vietnamese in questions or options.`,
 - Q6: "What does '[word from lesson]' mean?" → 4 Vietnamese meaning options (this is the ONLY Vietnamese question)
 Questions Q1-Q5 written in English. Q6 written in English too, only options in Vietnamese.`,
 
-    reading: `READING QUIZ — 6 questions about the passage content:
+    reading: `READING QUIZ — 6 questions about the passage content (remember: the passage itself must be 100% English/Thai):
 - Q1-Q3: Comprehension questions in Vietnamese asking about passage content → options in English (phrases/sentences from or about the passage)
 - Q4: Vocabulary question in English: "In the passage, '[word]' most likely means..." → 4 English options
 - Q5: Inference question in Vietnamese → options in English sentences
@@ -110,7 +120,7 @@ Questions Q1-Q5 written in English. Q6 written in English too, only options in V
       "word": "string — từ gốc",
       "phonetic": "string — phiên âm IPA",
       "meaning": "string — nghĩa tiếng Việt chính xác",
-      "example": "string — 1 câu ví dụ hoàn chỉnh bằng tiếng Anh/Thái, ngữ cảnh liên quan trực tiếp đến chủ đề",
+      "example": "string — 1 complete example sentence in English/Thai ONLY (no Vietnamese inside the sentence), relevant to the topic",
       "example_vi": "string — dịch nghĩa câu ví dụ sang tiếng Việt"
     }
   ],
@@ -129,10 +139,10 @@ YÊU CẦU words: Tạo ĐÚNG 10 từ vựng thuộc CHỦ ĐỀ "${topic ?? "c
 }`,
 
     reading: `{
-  "title": "string — tên bài đọc cụ thể",
-  "passage": "string — đoạn văn 180-220 từ, phù hợp trình độ ${level}, viết hoàn chỉnh và tự nhiên. Phải có ít nhất 3 đoạn rõ ràng.",
+  "title": "string — specific English/Thai article title (e.g. 'The Rise of Remote Work', 'Climate Change and Agriculture')",
+  "passage": "string — 180-220 word reading passage written 100% in English/Thai. ABSOLUTELY NO Vietnamese inside this field — not a single Vietnamese word, no translations in parentheses, no notes. Write natural, flowing English/Thai prose only. Include at least 3 clear paragraphs. Use the lesson vocabulary naturally in context.",
   "vocab_highlight": [
-    { "word": "string — từ khó trong bài", "meaning": "string — nghĩa tiếng Việt" }
+    { "word": "string — difficult word from the passage (English/Thai)", "meaning": "string — nghĩa tiếng Việt" }
   ],
   "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
 }
@@ -157,7 +167,7 @@ key_phrases: 4-5 cụm quan trọng từ transcript.`,
     { "part": "string — tên phần (Mở bài / Thân bài 1 / Thân bài 2 / Kết bài)", "guide": "string — hướng dẫn viết phần đó bằng tiếng Việt" }
   ],
   "useful_phrases": ["string — cụm từ hữu ích (song ngữ Anh – Việt)"],
-  "example": "string — bài viết mẫu hoàn chỉnh theo đề bài, dài 80-120 từ",
+  "example": "string — complete sample writing (80-120 words) in English/Thai ONLY — zero Vietnamese inside the writing sample itself",
   "quiz": [{ "q": "string", "options": ["A","B","C","D"], "answer": 0 }]
 }
 YÊU CẦU: structure có 4 phần. useful_phrases có 5-6 cụm. Quiz 6 câu về cấu trúc văn bản, từ nối, từ vựng học thuật.`,

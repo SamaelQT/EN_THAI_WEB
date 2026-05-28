@@ -40,7 +40,10 @@
       "Bash(copy src\\\\proxy.ts src\\\\middleware.ts)",
       "Bash(xargs grep -l \"placement\\\\|PlacementTest\\\\|getQuestionsForTest\")",
       "Bash(xargs grep -l \"signIn\\\\|login\\\\|credentials\")",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(npx tsx -e ' *)",
+      "Bash(cd /d D:\\\\Web\\\\EN_THAI_WEB)",
+      "Bash(npx tsx *)"
     ]
   }
 }
