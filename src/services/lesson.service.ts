@@ -465,7 +465,7 @@ async function getETSQuiz(
       take: 6,
       orderBy: { createdAt: "asc" },
     });
-    if (topicMatched.length >= 6) {
+    if (topicMatched.length >= 10) {
       return topicMatched.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
     }
   }
@@ -473,20 +473,20 @@ async function getETSQuiz(
   // 2. Any questions of this type at exact level
   const levelMatched = await prisma.examQuestion.findMany({
     where: baseWhere,
-    take: 6,
+    take: 10,
     orderBy: { createdAt: "asc" },
   });
-  if (levelMatched.length >= 6) {
+  if (levelMatched.length >= 10) {
     return levelMatched.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
   }
 
   // 3. Fallback: ignore level (use any available — better than AI-generated for ETS exams)
   const fallback = await prisma.examQuestion.findMany({
     where: { exam: examType, type: { in: types }, answer: { gte: 0 } },
-    take: 6,
+    take: 10,
     orderBy: { createdAt: "asc" },
   });
-  if (fallback.length >= 6) {
+  if (fallback.length >= 10) {
     return fallback.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
   }
 
