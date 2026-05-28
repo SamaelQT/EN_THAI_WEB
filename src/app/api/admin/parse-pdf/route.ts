@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -20,83 +20,138 @@ export const GRAMMAR_TAXONOMY = [
   "reading_vocabulary_in_context", "listening_comprehension", "other",
 ] as const;
 
+// llama-3.1-8b-instant: 20 000 TPM — higher limit, fast, good enough for extraction
+const EXTRACTION_MODEL = "llama-3.1-8b-instant";
+// Each chunk: ~12 000 chars ≈ 3 000 tokens input + 800 system + 2 500 response ≈ 6 300 tokens
+// → safe under 20 000 TPM per minute with 12-second cooldown between chunks
+const CHUNK_SIZE = 12_000;
+const CHUNK_DELAY_MS = 12_000;
+
 const EXTRACTION_SYSTEM = `You are a precise TOEIC/IELTS question extractor. Extract questions from raw PDF text and return ONLY a valid JSON array.
 
-TOEIC Reading structure:
-- Part 5 (Q101-140): 40 incomplete sentences with one blank (_____)
-- Part 6 (Q141-152): 4 short texts with blanks
-- Part 7 (Q153-200): Longer passages with comprehension questions
+TOEIC structure:
+- Part 5 (Q101-140): incomplete sentences with one blank (_____) — grammar/vocabulary
+- Part 6 (Q141-152): short texts with blanks
+- Part 7 (Q153-200): passages + comprehension questions
+- Listening Part 1 (Q1-6): photo descriptions
+- Listening Part 2 (Q7-31): short Q&A
+- Listening Part 3 (Q32-70): conversations + questions
+- Listening Part 4 (Q71-100): talks + questions
 
-Output: JSON array where each item is:
+Output JSON array, each item:
 {
   "questionNumber": number,
-  "part": "Part 5" | "Part 6" | "Part 7" | "Listening Part 1-4",
-  "type": "grammar" | "vocabulary" | "reading" | "listening",
-  "level": "A2" | "B1" | "B2" | "C1",
-  "question": "sentence with blank as _____",
+  "part": "Part 5"|"Part 6"|"Part 7"|"Listening Part 1"|"Listening Part 2"|"Listening Part 3"|"Listening Part 4",
+  "type": "grammar"|"vocabulary"|"reading"|"listening",
+  "level": "A2"|"B1"|"B2"|"C1",
+  "question": "text with blank as _____",
   "options": ["A text","B text","C text","D text"],
   "answer": 0,
-  "grammarPoint": "one tag from taxonomy",
-  "passage": "passage text for Part 6/7 only (omit for Part 5)",
-  "explanation": "why the answer is correct"
+  "grammarPoint": "taxonomy tag",
+  "passage": "passage for Part 6/7 or transcript for Part 3/4 — omit for Part 5",
+  "explanation": "why correct"
 }
 
-GRAMMAR POINT TAXONOMY (use exactly one):
-present_simple|present_continuous|present_perfect|past_simple|past_perfect|
-future_will|future_going_to|passive_voice|relative_clauses|conditionals|
-gerunds_infinitives|modal_verbs|articles|prepositions|comparatives_superlatives|
-word_form|subject_verb_agreement|parallel_structure|
-vocabulary_finance|vocabulary_hr|vocabulary_logistics|vocabulary_marketing|
-vocabulary_office|vocabulary_travel|vocabulary_general_business|
-reading_main_idea|reading_detail|reading_inference|reading_vocabulary_in_context|
-listening_comprehension|other
+GRAMMAR TAXONOMY: present_simple|present_continuous|present_perfect|past_simple|past_perfect|future_will|future_going_to|passive_voice|relative_clauses|conditionals|gerunds_infinitives|modal_verbs|articles|prepositions|comparatives_superlatives|word_form|subject_verb_agreement|parallel_structure|vocabulary_finance|vocabulary_hr|vocabulary_logistics|vocabulary_marketing|vocabulary_office|vocabulary_travel|vocabulary_general_business|reading_main_idea|reading_detail|reading_inference|reading_vocabulary_in_context|listening_comprehension|other
 
-CEFR LEVEL CRITERIA — rate each question individually:
-- A2: Basic tenses (present/past simple), everyday common vocabulary, short sentences, predictable patterns
-- B1: Perfect tenses, passive voice, common business vocabulary, moderate sentence complexity, straightforward inference
-- B2: Complex clauses (relative/conditional/noun), advanced business vocabulary, nuanced meaning, multi-step inference
-- C1: Inversion, cleft sentences, rare/academic vocabulary, sophisticated reasoning, abstract concepts
-For TOEIC Part 5: Q101–115 tend to be A2–B1, Q116–130 B1, Q131–140 B1–B2.
-For Part 6–7 and Listening Part 3–4: typically B1–B2.
+CEFR LEVEL:
+- A2: simple present/past, everyday vocabulary, short sentences
+- B1: perfect tenses, passive voice, common business vocabulary
+- B2: complex clauses, advanced business vocabulary, multi-step inference
+- C1: inversion, cleft sentences, academic vocabulary
 
 RULES:
-- options array: plain text only, NO "(A)" labels
-- answer: 0-based index (0=A, 1=B, 2=C, 3=D); set -1 if unknown
-- Part 5 type: "grammar" for verb form/structure, "vocabulary" for word choice
-- level: required — assess each question independently based on grammar and vocabulary difficulty
+- options: plain text only, NO "(A)" labels
+- answer: 0-based index; -1 if unknown
+- Part 5 type: "grammar" for structure, "vocabulary" for word choice
 - Return ONLY the JSON array`;
+
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
 function parseAnswerKey(text: string): Record<number, number> {
   const map: Record<number, number> = {};
   const LETTER: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
   try {
     const arr = JSON.parse(text);
-    if (Array.isArray(arr)) {
-      arr.forEach((v: number, i: number) => { map[101 + i] = v; });
-      return map;
-    }
-  } catch { /* not JSON array */ }
-  // Format: "101. A" | "101: B" | "101) C"
+    if (Array.isArray(arr)) { arr.forEach((v: number, i: number) => { map[101 + i] = v; }); return map; }
+  } catch { /* not JSON */ }
   const re1 = /\b(\d{1,3})\s*[.:)]\s*([ABCD])\b/gi;
   let m: RegExpExecArray | null;
   while ((m = re1.exec(text)) !== null) map[parseInt(m[1])] = LETTER[m[2].toUpperCase()] ?? 0;
-  // Format: "1 (A)" | "2 (B)" — Korean ETS answer key style
   const re2 = /\b(\d{1,3})\s*\(([ABCD])\)/gi;
   while ((m = re2.exec(text)) !== null) map[parseInt(m[1])] = LETTER[m[2].toUpperCase()] ?? 0;
   return map;
 }
 
-const SCRIPT_INSTRUCTIONS = `
-TRANSCRIPT MATCHING (script provided):
-- The SCRIPT section contains full text of all audio for this test.
-- TOEIC Part 3 (Q32-70): 13 conversations, 3 questions each (Q32-34, Q35-37, ..., Q68-70)
-- TOEIC Part 4 (Q71-100): 10 talks, 3 questions each (Q71-73, Q74-76, ..., Q98-100)
-- IELTS Listening: sections 1-4, questions numbered sequentially
-- For EACH question in Part 3 or 4: set "passage" = the COMPLETE transcript of its conversation/talk
-- All 3 questions sharing the same conversation/talk must have IDENTICAL "passage" text
-- Part 1 (Q1-6) and Part 2 (Q7-31): no passage needed (single-line exchanges)
-- Extract the passage text verbatim from the script — do NOT summarize
-`;
+type RawQ = Record<string, unknown>;
+
+async function extractChunk(
+  groq: Groq, chunk: string, exam: string, source: string, answerSection: string
+): Promise<RawQ[]> {
+  const res = await groq.chat.completions.create({
+    model: EXTRACTION_MODEL,
+    messages: [
+      { role: "system", content: EXTRACTION_SYSTEM },
+      { role: "user", content: `Extract all ${exam} questions from this text chunk. Source: "${source}"\n${answerSection}\n--- TEXT ---\n${chunk}\n--- END ---\n\nReturn JSON array.` },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.1,
+  });
+  const raw = res.choices[0]?.message?.content ?? "{}";
+  const parsed = JSON.parse(raw);
+  const arr = Array.isArray(parsed) ? parsed : (parsed.questions ?? parsed.data ?? []);
+  return arr as RawQ[];
+}
+
+async function matchTranscripts(
+  groq: Groq, questions: RawQ[], scriptText: string
+): Promise<RawQ[]> {
+  // Only process Part 3/4 that don't yet have a passage
+  const needsPassage = questions.filter(q =>
+    (String(q.part).includes("Part 3") || String(q.part).includes("Part 4")) && !q.passage
+  );
+  if (needsPassage.length === 0) return questions;
+
+  const qList = needsPassage
+    .map(q => `Q${q.questionNumber}(${q.part})`)
+    .join(", ");
+
+  const prompt = `Match TOEIC Listening transcripts to question groups.
+
+TOEIC Part 3 (Q32-70): 13 conversations, 3 questions each → Q32-34, Q35-37, ..., Q68-70
+TOEIC Part 4 (Q71-100): 10 talks, 3 questions each → Q71-73, Q74-76, ..., Q98-100
+
+QUESTIONS NEEDING TRANSCRIPT: ${qList}
+
+--- SCRIPT ---
+${scriptText.slice(0, 15000)}
+--- END ---
+
+Return JSON: {"matches":[{"questionNumbers":[32,33,34],"passage":"full conversation text"},...]
+- passage = COMPLETE verbatim transcript of the conversation/talk
+- All questions in same group share identical passage`;
+
+  const res = await groq.chat.completions.create({
+    model: EXTRACTION_MODEL,
+    messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_object" },
+    temperature: 0.1,
+  });
+  const raw = res.choices[0]?.message?.content ?? "{}";
+  const { matches = [] } = JSON.parse(raw) as { matches: { questionNumbers: number[]; passage: string }[] };
+
+  const passageMap = new Map<number, string>();
+  for (const m of matches) {
+    for (const n of (m.questionNumbers ?? [])) {
+      passageMap.set(n, m.passage ?? "");
+    }
+  }
+
+  return questions.map(q => ({
+    ...q,
+    passage: passageMap.get(q.questionNumber as number) ?? q.passage ?? null,
+  }));
+}
 
 // Accepts JSON body with extracted text — PDF parsing happens client-side
 export async function POST(req: Request) {
@@ -107,52 +162,70 @@ export async function POST(req: Request) {
     await req.json() as { text: string; exam?: string; source?: string; answerKey?: string; scriptText?: string };
 
   if (!text?.trim()) return NextResponse.json({ error: "text is required" }, { status: 400 });
-
-  const answerMap = answerKey.trim() ? parseAnswerKey(answerKey) : {};
-  const hasAnswers = Object.keys(answerMap).length > 0;
-
-  const answerSection = hasAnswers
-    ? `\nANSWER KEY: ${Object.entries(answerMap).map(([q, a]) => `Q${q}=${["A","B","C","D"][a]}`).join(" ")}\n`
-    : "\nNo answer key — set answer to -1.\n";
-
-  const scriptSection = scriptText.trim()
-    ? `\n${SCRIPT_INSTRUCTIONS}\n--- SCRIPT START ---\n${scriptText.slice(0, 30000)}\n--- SCRIPT END ---\n`
-    : "";
-
-  const userPrompt = `Extract all ${exam} questions from this text. Source: "${source}"
-${answerSection}${scriptSection}
---- TEXT START ---
-${text.slice(0, 50000)}
---- TEXT END ---
-
-Return a JSON array of all questions found.`;
-
   if (!process.env.GROQ_API_KEY)
     return NextResponse.json({ error: "GROQ_API_KEY not configured" }, { status: 500 });
 
+  const answerMap = answerKey.trim() ? parseAnswerKey(answerKey) : {};
+  const hasAnswers = Object.keys(answerMap).length > 0;
+  const answerSection = hasAnswers
+    ? `ANSWER KEY: ${Object.entries(answerMap).map(([q, a]) => `Q${q}=${["A","B","C","D"][a]}`).join(" ")}`
+    : "No answer key — set answer to -1.";
+
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-  let questions: unknown[];
-  try {
-    const res = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        { role: "system", content: EXTRACTION_SYSTEM },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.1,
-    });
-    const raw = res.choices[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(raw);
-    questions = Array.isArray(parsed) ? parsed : (parsed.questions ?? parsed.data ?? []);
-  } catch (e) {
-    return NextResponse.json({ error: `AI extraction failed: ${e}` }, { status: 500 });
+
+  // ── Split into chunks and extract ─────────────────────────────────────────
+  const chunks: string[] = [];
+  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+    chunks.push(text.slice(i, i + CHUNK_SIZE));
+  }
+  // Cap at 6 chunks (72 000 chars) — enough for any single exam part
+  const chunksToProcess = chunks.slice(0, 6);
+
+  let allRaw: RawQ[] = [];
+  for (let i = 0; i < chunksToProcess.length; i++) {
+    if (i > 0) await sleep(CHUNK_DELAY_MS); // wait between chunks to respect TPM
+    try {
+      const results = await extractChunk(groq, chunksToProcess[i], exam, source, answerSection);
+      allRaw = allRaw.concat(results);
+    } catch (e) {
+      // Non-fatal: log and continue — partial results still useful
+      console.error(`Chunk ${i + 1} failed:`, e);
+    }
   }
 
-  type RawQ = Record<string, unknown>;
-  const normalized = (questions as RawQ[])
-    .filter((q) => q.question && Array.isArray(q.options) && (q.options as unknown[]).length === 4)
-    .map((q) => ({
+  // ── Dedup by questionNumber ───────────────────────────────────────────────
+  const seen = new Set<number>();
+  allRaw = allRaw.filter(q => {
+    const n = q.questionNumber as number;
+    if (!n) return true; // keep if no number
+    if (seen.has(n)) return false;
+    seen.add(n);
+    return true;
+  });
+
+  // ── Match transcripts (script pass) ──────────────────────────────────────
+  if (scriptText.trim()) {
+    await sleep(CHUNK_DELAY_MS);
+    try {
+      allRaw = await matchTranscripts(groq, allRaw, scriptText);
+    } catch (e) {
+      console.error("Script matching failed:", e);
+    }
+  }
+
+  // ── Apply answer key overrides ────────────────────────────────────────────
+  if (hasAnswers) {
+    allRaw = allRaw.map(q => {
+      const n = q.questionNumber as number;
+      if (n && answerMap[n] !== undefined) return { ...q, answer: answerMap[n] };
+      return q;
+    });
+  }
+
+  // ── Normalize ─────────────────────────────────────────────────────────────
+  const normalized = allRaw
+    .filter(q => q.question && Array.isArray(q.options) && (q.options as unknown[]).length === 4)
+    .map(q => ({
       exam,
       part: String(q.part ?? "Part 5"),
       type: String(q.type ?? "grammar"),
@@ -170,7 +243,8 @@ Return a JSON array of all questions found.`;
 
   return NextResponse.json({
     extracted: normalized.length,
-    unanswered: normalized.filter((q) => q.answer === -1).length,
+    unanswered: normalized.filter(q => q.answer === -1).length,
+    chunks: chunksToProcess.length,
     questions: normalized,
   });
 }
