@@ -412,6 +412,77 @@ export async function completeLesson(
   return { xpGained, newStreak, newAchievements, weekAdvanced };
 }
 
+// ── ETS quiz replacement ───────────────────────────────────────────────────
+
+/**
+ * Try to find 6 real ETS questions for this lesson type + topic.
+ * Returns null if not enough questions exist (AI quiz will be used instead).
+ */
+async function getETSQuiz(
+  examType: string | undefined,
+  lessonType: string,
+  topic?: string
+): Promise<{ q: string; options: string[]; answer: number }[] | null> {
+  if (!examType || (examType !== "TOEIC" && examType !== "IELTS")) return null;
+
+  // Map lesson type → ETS question type
+  const typeMap: Record<string, string[]> = {
+    grammar: ["grammar"],
+    vocabulary: ["vocabulary"],
+    reading: ["reading"],
+    listening: ["listening"],
+    review: ["grammar", "vocabulary"],
+  };
+  const types = typeMap[lessonType];
+  if (!types) return null;
+
+  // Extract keywords from topic for grammarPoint matching
+  const topicKeywords = topic
+    ? topic
+        .toLowerCase()
+        .replace(/[()]/g, " ")
+        .split(/[\s,_-]+/)
+        .filter((w) => w.length > 3)
+    : [];
+
+  // Try topic-matched query first
+  if (topicKeywords.length > 0) {
+    const topicMatched = await prisma.examQuestion.findMany({
+      where: {
+        exam: examType,
+        type: { in: types },
+        answer: { gte: 0 }, // exclude unanswered (-1)
+        OR: topicKeywords.map((kw) => ({
+          grammarPoint: { contains: kw, mode: "insensitive" as const },
+        })),
+      },
+      take: 6,
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (topicMatched.length >= 6) {
+      return topicMatched.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
+    }
+  }
+
+  // Fallback: any available ETS questions of this type
+  const fallback = await prisma.examQuestion.findMany({
+    where: {
+      exam: examType,
+      type: { in: types },
+      answer: { gte: 0 },
+    },
+    take: 6,
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (fallback.length >= 6) {
+    return fallback.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
+  }
+
+  return null; // not enough — AI generates quiz
+}
+
 // ── Groq helper ────────────────────────────────────────────────────────────
 
 async function callAI(prompt: string): Promise<any> {
@@ -444,6 +515,17 @@ async function fetchExamExamples(examType: string | undefined, lessonType: strin
   }
 }
 
+/** Generate lesson content via AI, then replace quiz with real ETS questions if available. */
+async function generateLessonContent(req: GenerateRequest): Promise<Record<string, unknown>> {
+  const lesson = await callAI(buildPrompt(req));
+  const etsQuiz = await getETSQuiz(req.examType, req.lessonType, req.topic);
+  if (etsQuiz) {
+    lesson.quiz = etsQuiz;
+    lesson._quizSource = "ETS"; // flag for debugging
+  }
+  return lesson;
+}
+
 export async function generateLesson(lessonType: string, language: string, level: string, topic?: string, userId?: string, examType?: string, weekNumber?: number, totalWeeks?: number, dayId?: string) {
   if (!lessonType || !language || !level) throw new Error("Missing fields");
   const examExamples = await fetchExamExamples(examType, lessonType);
@@ -470,13 +552,13 @@ export async function generateLesson(lessonType: string, language: string, level
       throw err;
     }
 
-    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId, examExamples }));
+    const lesson = await generateLessonContent({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId, examExamples });
 
     if (!alreadyCompleted) {
       await prisma.lesson.upsert({
         where: { id: dayLessonId },
-        update: { content: JSON.stringify(lesson), title: lesson.title ?? dayLessonId },
-        create: { id: dayLessonId, language, type: lessonType, level, title: lesson.title ?? dayLessonId, content: JSON.stringify(lesson), xpReward: 15 },
+        update: { content: JSON.stringify(lesson), title: String(lesson.title ?? dayLessonId) },
+        create: { id: dayLessonId, language, type: lessonType, level, title: String(lesson.title ?? dayLessonId), content: JSON.stringify(lesson), xpReward: 15 },
       });
     }
     return lesson;
@@ -485,11 +567,9 @@ export async function generateLesson(lessonType: string, language: string, level
   // Topic-based lesson: unique ID per topic, skip fallback chain
   if (topic) {
     const slug = topicToSlug(topic);
-    // Include examType in cache key so TOEIC/IELTS lessons are stored separately
     const examSuffix = examType && examType !== "general" ? `_${examType.toLowerCase()}` : "";
     const topicId = `${lessonType}_${language}_${level}_${slug}${examSuffix}`;
 
-    // Check if user already completed this lesson → generate fresh variant
     const alreadyCompleted = userId
       ? await prisma.lessonProgress.findFirst({ where: { userId, lessonId: topicId } })
       : null;
@@ -497,7 +577,13 @@ export async function generateLesson(lessonType: string, language: string, level
     if (!alreadyCompleted) {
       const existing = await prisma.lesson.findUnique({ where: { id: topicId } });
       if (existing && existing.content !== "{}") {
-        try { return JSON.parse(existing.content); } catch { /* fall through to generate */ }
+        try {
+          const cached = JSON.parse(existing.content);
+          // Replace quiz with ETS questions if available (even for cached lessons)
+          const etsQuiz = await getETSQuiz(examType, lessonType, topic);
+          if (etsQuiz) cached.quiz = etsQuiz;
+          return cached;
+        } catch { /* fall through to generate */ }
       }
     }
 
@@ -507,27 +593,30 @@ export async function generateLesson(lessonType: string, language: string, level
       throw err;
     }
 
-    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, examExamples }));
+    const lesson = await generateLessonContent({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, examExamples });
 
-    // Only cache if first time (not a variant for completed lesson)
     if (!alreadyCompleted) {
       await prisma.lesson.upsert({
         where: { id: topicId },
-        update: { content: JSON.stringify(lesson), title: lesson.title ?? topicId },
-        create: { id: topicId, language, type: lessonType, level, title: lesson.title ?? topicId, content: JSON.stringify(lesson), xpReward: 15 },
+        update: { content: JSON.stringify(lesson), title: String(lesson.title ?? topicId) },
+        create: { id: topicId, language, type: lessonType, level, title: String(lesson.title ?? topicId), content: JSON.stringify(lesson), xpReward: 15 },
       });
     }
     return lesson;
   }
 
-  // No topic: use seeded lesson (exact match first)
+  // No topic: seeded lesson
   const lessonId = `${lessonType}_${language}_${level}`;
   const exact = await prisma.lesson.findUnique({ where: { id: lessonId } });
   if (exact && exact.content !== "{}") {
-    try { return JSON.parse(exact.content); } catch { /* fall through */ }
+    try {
+      const cached = JSON.parse(exact.content);
+      const etsQuiz = await getETSQuiz(examType, lessonType);
+      if (etsQuiz) cached.quiz = etsQuiz;
+      return cached;
+    } catch { /* fall through */ }
   }
 
-  // Fallback: same type + language, closest level
   const LEVEL_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"];
   const targetIdx = LEVEL_ORDER.indexOf(level);
   const fallbacks = await prisma.lesson.findMany({
@@ -542,7 +631,6 @@ export async function generateLesson(lessonType: string, language: string, level
     try { return JSON.parse(sorted[0].content); } catch { /* fall through */ }
   }
 
-  // Last resort: same language, any type
   const anyLesson = await prisma.lesson.findFirst({ where: { language, content: { not: "{}" } } });
   if (anyLesson) {
     try { return JSON.parse(anyLesson.content); } catch { /* fall through */ }
@@ -554,11 +642,11 @@ export async function generateLesson(lessonType: string, language: string, level
     throw err;
   }
 
-  const lesson = await callAI(buildPrompt({ lessonType, language, level, examExamples }));
+  const lesson = await generateLessonContent({ lessonType, language, level, examExamples });
   await prisma.lesson.upsert({
     where: { id: lessonId },
-    update: { content: JSON.stringify(lesson), title: lesson.title ?? lessonId },
-    create: { id: lessonId, language, type: lessonType, level, title: lesson.title ?? lessonId, content: JSON.stringify(lesson), xpReward: 15 },
+    update: { content: JSON.stringify(lesson), title: String(lesson.title ?? lessonId) },
+    create: { id: lessonId, language, type: lessonType, level, title: String(lesson.title ?? lessonId), content: JSON.stringify(lesson), xpReward: 15 },
   });
   return lesson;
 }
