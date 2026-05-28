@@ -6,7 +6,8 @@ if (process.env.NODE_ENV === "development") {
 }
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // pdf-parse reads test files at import time — keep it server-side only, out of the bundle
+  serverExternalPackages: ["pdf-parse"],
 };
 
 export default nextConfig;

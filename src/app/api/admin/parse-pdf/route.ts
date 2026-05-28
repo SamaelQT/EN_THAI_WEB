@@ -1,9 +1,9 @@
+export const dynamic = "force-dynamic";
+export const maxDuration = 60; // PDF parsing + AI can take a while
+
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import Groq from "groq-sdk";
-// pdf-parse uses CommonJS — import via require to avoid ESM issues
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse");
 
 // Standardized grammar point taxonomy used across lesson generation AND PDF extraction
 export const GRAMMAR_TAXONOMY = [
@@ -122,9 +122,11 @@ export async function POST(req: Request) {
 
   if (!file) return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
 
-  // Parse PDF
+  // Parse PDF — dynamic import keeps pdf-parse out of the build-time bundle
   let rawText: string;
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require("pdf-parse");
     const buffer = Buffer.from(await file.arrayBuffer());
     const pdfData = await pdfParse(buffer);
     rawText = pdfData.text ?? "";
