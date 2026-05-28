@@ -47,38 +47,71 @@ function StatsBar({ stats }: { stats: Stat[] }) {
 
 // ── PDF Parse tab ──────────────────────────────────────────────────────────
 
+/** Extract text from PDF using pdfjs-dist in the browser (no server-side parsing) */
+async function extractPDFText(file: File): Promise<string> {
+  const pdfjs = await import("pdfjs-dist");
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url
+  ).toString();
+
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({ data: buffer }).promise;
+  const pages: string[] = [];
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((item) => ("str" in item ? item.str : ""))
+      .join(" ");
+    pages.push(pageText);
+  }
+  return pages.join("\n");
+}
+
 function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [exam, setExam] = useState("TOEIC");
-  const [level, setLevel] = useState("B1");
   const [source, setSource] = useState("");
   const [answerKey, setAnswerKey] = useState("");
+  const [extracting, setExtracting] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ extracted: number; unanswered: number; questions: ParsedQuestion[] } | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [step, setStep] = useState<"idle" | "extracting" | "ai" | "done">("idle");
 
   async function handleParse() {
     if (!file) { toast.error("Chọn file PDF trước"); return; }
-    setParsing(true);
     setResult(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("exam", exam);
-      fd.append("level", level);
-      fd.append("source", source || file.name);
-      if (answerKey.trim()) fd.append("answerKey", answerKey);
+      // Step 1: extract text client-side
+      setStep("extracting");
+      setExtracting(true);
+      const text = await extractPDFText(file);
+      setExtracting(false);
 
-      const res = await fetch("/api/admin/parse-pdf", { method: "POST", body: fd });
+      if (!text.trim()) throw new Error("Không thể đọc text từ PDF này");
+
+      // Step 2: send text to AI
+      setStep("ai");
+      setParsing(true);
+      const res = await fetch("/api/admin/parse-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, exam, source: source || file.name, answerKey }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setResult(data);
+      setStep("done");
       toast.success(`Trích xuất được ${data.extracted} câu hỏi`);
     } catch (e: unknown) {
       toast.error(`Lỗi: ${e instanceof Error ? e.message : String(e)}`);
+      setStep("idle");
     } finally {
+      setExtracting(false);
       setParsing(false);
     }
   }
@@ -136,23 +169,13 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
       {/* Form */}
       <Card>
         <CardContent className="pt-5 space-y-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-medium">Loại đề</label>
               <select value={exam} onChange={(e) => setExam(e.target.value)}
                 className="w-full text-sm border rounded-lg px-3 py-2 bg-background">
                 <option value="TOEIC">TOEIC</option>
                 <option value="IELTS">IELTS</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium">Trình độ</label>
-              <select value={level} onChange={(e) => setLevel(e.target.value)}
-                className="w-full text-sm border rounded-lg px-3 py-2 bg-background">
-                <option value="A2">A2</option>
-                <option value="B1">B1</option>
-                <option value="B2">B2</option>
-                <option value="C1">C1</option>
               </select>
             </div>
             <div className="space-y-1">
@@ -165,11 +188,11 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
 
           {/* File upload */}
           <div
-            className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${file ? "border-green-400 bg-green-50" : "border-border hover:border-primary/50"}`}
+            className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${file ? "border-green-400 bg-green-50 dark:bg-green-950/20" : "border-border hover:border-primary/50"}`}
             onClick={() => fileRef.current?.click()}
           >
             <input ref={fileRef} type="file" accept=".pdf" className="hidden"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+              onChange={(e) => { setFile(e.target.files?.[0] ?? null); setStep("idle"); setResult(null); }} />
             {file ? (
               <div className="flex items-center justify-center gap-2 text-green-700">
                 <CheckCircle size={18} />
@@ -180,7 +203,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
               <div className="text-muted-foreground">
                 <FileText size={32} className="mx-auto mb-2 opacity-40" />
                 <p className="text-sm">Click để chọn file PDF</p>
-                <p className="text-xs mt-1">ETS 2024 Reading hoặc Listening</p>
+                <p className="text-xs mt-1">ETS 2024 Reading hoặc Listening (không cần chia trình độ)</p>
               </div>
             )}
           </div>
@@ -188,22 +211,26 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
           {/* Answer key */}
           <div className="space-y-1">
             <label className="text-xs font-medium">
-              Đáp án (tùy chọn) — từ file "ĐÁP ÁN + TRANSCRIPT"
+              Đáp án — từ file "ĐÁP ÁN + TRANSCRIPT" <span className="text-muted-foreground font-normal">(tùy chọn)</span>
             </label>
             <textarea
-              className="w-full h-24 text-xs font-mono bg-muted/50 border rounded-lg p-3 resize-none"
-              placeholder={"Hỗ trợ 2 format:\n1. Text: 101. A  102. C  103. B  104. D ...\n2. JSON array: [0, 2, 1, 3, ...] (0=A, 1=B, 2=C, 3=D, bắt đầu từ Q101)"}
+              className="w-full h-20 text-xs font-mono bg-muted/50 border rounded-lg p-3 resize-none"
+              placeholder={"Format 1 — text: 101. A  102. C  103. B  104. D ...\nFormat 2 — JSON: [0, 2, 1, 3, ...] (0=A, 1=B, 2=C, 3=D, bắt đầu từ Q101)"}
               value={answerKey}
               onChange={(e) => setAnswerKey(e.target.value)}
             />
           </div>
 
-          <Button onClick={handleParse} disabled={parsing || !file} className="w-full">
-            {parsing ? (
-              <span className="flex items-center gap-2"><span className="animate-spin">⏳</span> AI đang trích xuất câu hỏi...</span>
-            ) : (
-              <span className="flex items-center gap-2"><FileText size={16} /> Trích xuất câu hỏi từ PDF</span>
-            )}
+          {/* Step indicator */}
+          {(extracting || parsing) && (
+            <div className="flex items-center gap-3 text-sm text-muted-foreground bg-muted/50 rounded-lg px-4 py-3">
+              <span className="animate-spin text-lg">⏳</span>
+              {step === "extracting" ? "Đọc text từ PDF (client-side)..." : "AI đang phân tích và cấu trúc câu hỏi..."}
+            </div>
+          )}
+
+          <Button onClick={handleParse} disabled={extracting || parsing || !file} className="w-full">
+            <FileText size={16} className="mr-2" /> Trích xuất câu hỏi từ PDF
           </Button>
         </CardContent>
       </Card>
