@@ -85,7 +85,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
   const [source, setSource] = useState("");
   const [answerKey, setAnswerKey] = useState("");
   const [answerKeyFile, setAnswerKeyFile] = useState<File | null>(null);
-  const [answerTestNum, setAnswerTestNum] = useState(1);
+  const [testNum, setTestNum] = useState(1); // which test to extract (for multi-test PDFs)
   const [scriptFile, setScriptFile] = useState<File | null>(null);
   const [extractingAnswerKey, setExtractingAnswerKey] = useState(false);
   const [extractingScript, setExtractingScript] = useState(false);
@@ -158,7 +158,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
       const res = await fetch("/api/admin/parse-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, exam, source: source || file?.name || "Manual", answerKey, scriptText: scriptText || undefined }),
+        body: JSON.stringify({ text, exam, source: source || file?.name || "Manual", answerKey, scriptText: scriptText || undefined, testNum }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -227,7 +227,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
       {/* Form */}
       <Card>
         <CardContent className="pt-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1">
               <label className="text-xs font-medium">Loại đề</label>
               <select value={exam} onChange={(e) => setExam(e.target.value)}
@@ -235,6 +235,16 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
                 <option value="TOEIC">TOEIC</option>
                 <option value="IELTS">IELTS</option>
               </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Test số (1–10)</label>
+              <input type="number" min={1} max={10} value={testNum}
+                onChange={(e) => {
+                  const n = parseInt(e.target.value) || 1;
+                  setTestNum(n);
+                  if (answerKeyFile) handleAnswerKeyPDF(answerKeyFile, n);
+                }}
+                className="w-full text-sm border rounded-lg px-3 py-2 bg-background text-center" />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">Nguồn (tùy chọn)</label>
@@ -334,20 +344,6 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
                 Đáp án <span className="text-muted-foreground font-normal">(tùy chọn)</span>
               </label>
               <div className="flex items-center gap-2">
-                {answerKeyFile && (
-                  <div className="flex items-center gap-1.5">
-                    <label className="text-xs text-muted-foreground">Test số</label>
-                    <input
-                      type="number" min={1} max={10} value={answerTestNum}
-                      onChange={(e) => {
-                        const n = parseInt(e.target.value) || 1;
-                        setAnswerTestNum(n);
-                        if (answerKeyFile) handleAnswerKeyPDF(answerKeyFile, n);
-                      }}
-                      className="w-12 text-xs border rounded px-1.5 py-0.5 bg-background text-center"
-                    />
-                  </div>
-                )}
                 <button
                   type="button"
                   onClick={() => answerKeyFileRef.current?.click()}
@@ -360,7 +356,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
                 <input ref={answerKeyFileRef} type="file" accept=".pdf" className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) handleAnswerKeyPDF(f, answerTestNum);
+                    if (f) handleAnswerKeyPDF(f, testNum);
                   }}
                 />
               </div>

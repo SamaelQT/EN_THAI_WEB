@@ -68,6 +68,13 @@ RULES:
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
+/** Extract the TEST N section from a multi-test PDF text */
+function extractTestSection(text: string, testNum: number): string {
+  const re = new RegExp(`TEST\\s*0*${testNum}\\b[\\s\\S]*?(?=\\bTEST\\s*0*${testNum + 1}\\b|$)`, "i");
+  const match = text.match(re);
+  return match ? match[0] : "";
+}
+
 /** Call Groq, auto-retry once on 429 using the retry-after header */
 async function groqWithRetry(
   groq: Groq,
@@ -181,13 +188,15 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { text, exam = "TOEIC", source = "Unknown", answerKey = "", scriptText = "" } =
-    await req.json() as { text: string; exam?: string; source?: string; answerKey?: string; scriptText?: string };
+  const { text, exam = "TOEIC", source = "Unknown", answerKey = "", scriptText = "", testNum } =
+    await req.json() as { text: string; exam?: string; source?: string; answerKey?: string; scriptText?: string; testNum?: number };
 
   if (!text?.trim()) return NextResponse.json({ error: "text is required" }, { status: 400 });
   if (!process.env.GROQ_API_KEY)
     return NextResponse.json({ error: "GROQ_API_KEY not configured" }, { status: 500 });
 
+  // If testNum given, slice question text to just that test's section
+  const questionText = testNum ? extractTestSection(text, testNum) || text : text;
   const answerMap = answerKey.trim() ? parseAnswerKey(answerKey) : {};
   const hasAnswers = Object.keys(answerMap).length > 0;
   const answerSection = hasAnswers
@@ -198,8 +207,8 @@ export async function POST(req: Request) {
 
   // ── Split into chunks and extract ─────────────────────────────────────────
   const chunks: string[] = [];
-  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
-    chunks.push(text.slice(i, i + CHUNK_SIZE));
+  for (let i = 0; i < questionText.length; i += CHUNK_SIZE) {
+    chunks.push(questionText.slice(i, i + CHUNK_SIZE));
   }
   // Cap at 6 chunks (72 000 chars) — enough for any single exam part
   const chunksToProcess = chunks.slice(0, 6);

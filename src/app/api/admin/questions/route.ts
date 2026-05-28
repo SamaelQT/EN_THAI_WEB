@@ -23,7 +23,7 @@ function validateQuestion(q: unknown, index: number): string | null {
   if (!o.level || typeof o.level !== "string") return `[${index}] Missing level`;
   if (!o.question || typeof o.question !== "string") return `[${index}] Missing question`;
   if (!Array.isArray(o.options) || o.options.length !== 4) return `[${index}] options must be array of 4`;
-  if (typeof o.answer !== "number" || o.answer < 0 || o.answer > 3) return `[${index}] answer must be 0-3`;
+  if (typeof o.answer !== "number" || (o.answer !== -1 && (o.answer < 0 || o.answer > 3))) return `[${index}] answer must be 0-3 (or -1 for unknown)`;
   return null;
 }
 
