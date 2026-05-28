@@ -421,7 +421,8 @@ export async function completeLesson(
 async function getETSQuiz(
   examType: string | undefined,
   lessonType: string,
-  topic?: string
+  topic?: string,
+  level?: string
 ): Promise<{ q: string; options: string[]; answer: number }[] | null> {
   if (!examType || (examType !== "TOEIC" && examType !== "IELTS")) return null;
 
@@ -445,13 +446,18 @@ async function getETSQuiz(
         .filter((w) => w.length > 3)
     : [];
 
-  // Try topic-matched query first
+  const baseWhere = {
+    exam: examType,
+    type: { in: types },
+    answer: { gte: 0 }, // exclude unanswered (-1)
+    ...(level ? { level } : {}),
+  };
+
+  // 1. Try topic-matched + exact level
   if (topicKeywords.length > 0) {
     const topicMatched = await prisma.examQuestion.findMany({
       where: {
-        exam: examType,
-        type: { in: types },
-        answer: { gte: 0 }, // exclude unanswered (-1)
+        ...baseWhere,
         OR: topicKeywords.map((kw) => ({
           grammarPoint: { contains: kw, mode: "insensitive" as const },
         })),
@@ -459,23 +465,27 @@ async function getETSQuiz(
       take: 6,
       orderBy: { createdAt: "asc" },
     });
-
     if (topicMatched.length >= 6) {
       return topicMatched.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
     }
   }
 
-  // Fallback: any available ETS questions of this type
-  const fallback = await prisma.examQuestion.findMany({
-    where: {
-      exam: examType,
-      type: { in: types },
-      answer: { gte: 0 },
-    },
+  // 2. Any questions of this type at exact level
+  const levelMatched = await prisma.examQuestion.findMany({
+    where: baseWhere,
     take: 6,
     orderBy: { createdAt: "asc" },
   });
+  if (levelMatched.length >= 6) {
+    return levelMatched.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
+  }
 
+  // 3. Fallback: ignore level (use any available — better than AI-generated for ETS exams)
+  const fallback = await prisma.examQuestion.findMany({
+    where: { exam: examType, type: { in: types }, answer: { gte: 0 } },
+    take: 6,
+    orderBy: { createdAt: "asc" },
+  });
   if (fallback.length >= 6) {
     return fallback.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
   }
@@ -518,7 +528,7 @@ async function fetchExamExamples(examType: string | undefined, lessonType: strin
 /** Generate lesson content via AI, then replace quiz with real ETS questions if available. */
 async function generateLessonContent(req: GenerateRequest): Promise<Record<string, unknown>> {
   const lesson = await callAI(buildPrompt(req));
-  const etsQuiz = await getETSQuiz(req.examType, req.lessonType, req.topic);
+  const etsQuiz = await getETSQuiz(req.examType, req.lessonType, req.topic, req.level);
   if (etsQuiz) {
     lesson.quiz = etsQuiz;
     lesson._quizSource = "ETS"; // flag for debugging
@@ -580,7 +590,7 @@ export async function generateLesson(lessonType: string, language: string, level
         try {
           const cached = JSON.parse(existing.content);
           // Replace quiz with ETS questions if available (even for cached lessons)
-          const etsQuiz = await getETSQuiz(examType, lessonType, topic);
+          const etsQuiz = await getETSQuiz(examType, lessonType, topic, level);
           if (etsQuiz) cached.quiz = etsQuiz;
           return cached;
         } catch { /* fall through to generate */ }
@@ -611,7 +621,7 @@ export async function generateLesson(lessonType: string, language: string, level
   if (exact && exact.content !== "{}") {
     try {
       const cached = JSON.parse(exact.content);
-      const etsQuiz = await getETSQuiz(examType, lessonType);
+      const etsQuiz = await getETSQuiz(examType, lessonType, undefined, level);
       if (etsQuiz) cached.quiz = etsQuiz;
       return cached;
     } catch { /* fall through */ }

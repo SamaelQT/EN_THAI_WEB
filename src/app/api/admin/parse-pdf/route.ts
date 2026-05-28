@@ -32,6 +32,7 @@ Output: JSON array where each item is:
   "questionNumber": number,
   "part": "Part 5" | "Part 6" | "Part 7" | "Listening Part 1-4",
   "type": "grammar" | "vocabulary" | "reading" | "listening",
+  "level": "A2" | "B1" | "B2" | "C1",
   "question": "sentence with blank as _____",
   "options": ["A text","B text","C text","D text"],
   "answer": 0,
@@ -50,10 +51,19 @@ vocabulary_office|vocabulary_travel|vocabulary_general_business|
 reading_main_idea|reading_detail|reading_inference|reading_vocabulary_in_context|
 listening_comprehension|other
 
+CEFR LEVEL CRITERIA — rate each question individually:
+- A2: Basic tenses (present/past simple), everyday common vocabulary, short sentences, predictable patterns
+- B1: Perfect tenses, passive voice, common business vocabulary, moderate sentence complexity, straightforward inference
+- B2: Complex clauses (relative/conditional/noun), advanced business vocabulary, nuanced meaning, multi-step inference
+- C1: Inversion, cleft sentences, rare/academic vocabulary, sophisticated reasoning, abstract concepts
+For TOEIC Part 5: Q101–115 tend to be A2–B1, Q116–130 B1, Q131–140 B1–B2.
+For Part 6–7 and Listening Part 3–4: typically B1–B2.
+
 RULES:
 - options array: plain text only, NO "(A)" labels
 - answer: 0-based index (0=A, 1=B, 2=C, 3=D); set -1 if unknown
 - Part 5 type: "grammar" for verb form/structure, "vocabulary" for word choice
+- level: required — assess each question independently based on grammar and vocabulary difficulty
 - Return ONLY the JSON array`;
 
 function parseAnswerKey(text: string): Record<number, number> {
@@ -130,7 +140,7 @@ Return a JSON array of all questions found.`;
       exam,
       part: String(q.part ?? "Part 5"),
       type: String(q.type ?? "grammar"),
-      level: exam === "IELTS" ? "B2" : "B1",
+      level: (["A2", "B1", "B2", "C1"].includes(String(q.level)) ? String(q.level) : (exam === "IELTS" ? "B2" : "B1")),
       question: String(q.question),
       options: (q.options as string[]).map(String),
       answer: typeof q.answer === "number" && q.answer >= 0 ? q.answer : -1,
