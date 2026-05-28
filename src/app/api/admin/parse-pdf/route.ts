@@ -86,13 +86,25 @@ function parseAnswerKey(text: string): Record<number, number> {
   return map;
 }
 
+const SCRIPT_INSTRUCTIONS = `
+TRANSCRIPT MATCHING (script provided):
+- The SCRIPT section contains full text of all audio for this test.
+- TOEIC Part 3 (Q32-70): 13 conversations, 3 questions each (Q32-34, Q35-37, ..., Q68-70)
+- TOEIC Part 4 (Q71-100): 10 talks, 3 questions each (Q71-73, Q74-76, ..., Q98-100)
+- IELTS Listening: sections 1-4, questions numbered sequentially
+- For EACH question in Part 3 or 4: set "passage" = the COMPLETE transcript of its conversation/talk
+- All 3 questions sharing the same conversation/talk must have IDENTICAL "passage" text
+- Part 1 (Q1-6) and Part 2 (Q7-31): no passage needed (single-line exchanges)
+- Extract the passage text verbatim from the script — do NOT summarize
+`;
+
 // Accepts JSON body with extracted text — PDF parsing happens client-side
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { text, exam = "TOEIC", source = "Unknown", answerKey = "" } =
-    await req.json() as { text: string; exam?: string; source?: string; answerKey?: string };
+  const { text, exam = "TOEIC", source = "Unknown", answerKey = "", scriptText = "" } =
+    await req.json() as { text: string; exam?: string; source?: string; answerKey?: string; scriptText?: string };
 
   if (!text?.trim()) return NextResponse.json({ error: "text is required" }, { status: 400 });
 
@@ -103,10 +115,14 @@ export async function POST(req: Request) {
     ? `\nANSWER KEY: ${Object.entries(answerMap).map(([q, a]) => `Q${q}=${["A","B","C","D"][a]}`).join(" ")}\n`
     : "\nNo answer key — set answer to -1.\n";
 
+  const scriptSection = scriptText.trim()
+    ? `\n${SCRIPT_INSTRUCTIONS}\n--- SCRIPT START ---\n${scriptText.slice(0, 30000)}\n--- SCRIPT END ---\n`
+    : "";
+
   const userPrompt = `Extract all ${exam} questions from this text. Source: "${source}"
-${answerSection}
+${answerSection}${scriptSection}
 --- TEXT START ---
-${text.slice(0, 55000)}
+${text.slice(0, 50000)}
 --- TEXT END ---
 
 Return a JSON array of all questions found.`;

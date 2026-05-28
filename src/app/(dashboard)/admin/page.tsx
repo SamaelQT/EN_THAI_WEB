@@ -79,19 +79,37 @@ function extractTestSection(text: string, testNum: number): string {
 function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const answerKeyFileRef = useRef<HTMLInputElement>(null);
+  const scriptFileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [exam, setExam] = useState("TOEIC");
   const [source, setSource] = useState("");
   const [answerKey, setAnswerKey] = useState("");
   const [answerKeyFile, setAnswerKeyFile] = useState<File | null>(null);
   const [answerTestNum, setAnswerTestNum] = useState(1);
+  const [scriptFile, setScriptFile] = useState<File | null>(null);
   const [extractingAnswerKey, setExtractingAnswerKey] = useState(false);
+  const [extractingScript, setExtractingScript] = useState(false);
+  const [scriptText, setScriptText] = useState("");
   const [extracting, setExtracting] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ extracted: number; unanswered: number; questions: ParsedQuestion[] } | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [step, setStep] = useState<"idle" | "extracting" | "ai" | "done">("idle");
+
+  async function handleScriptPDF(f: File) {
+    setScriptFile(f);
+    setExtractingScript(true);
+    try {
+      const text = await extractPDFText(f);
+      setScriptText(text);
+      toast.success(`Đã đọc script: ${text.length.toLocaleString()} ký tự`);
+    } catch {
+      toast.error("Không đọc được file Script");
+    } finally {
+      setExtractingScript(false);
+    }
+  }
 
   async function handleAnswerKeyPDF(f: File, testNum: number) {
     setAnswerKeyFile(f);
@@ -125,7 +143,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
       const res = await fetch("/api/admin/parse-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, exam, source: source || file.name, answerKey }),
+        body: JSON.stringify({ text, exam, source: source || file.name, answerKey, scriptText: scriptText || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -217,7 +235,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
             onClick={() => fileRef.current?.click()}
           >
             <input ref={fileRef} type="file" accept=".pdf" className="hidden"
-              onChange={(e) => { setFile(e.target.files?.[0] ?? null); setStep("idle"); setResult(null); }} />
+              onChange={(e) => { setFile(e.target.files?.[0] ?? null); setStep("idle"); setResult(null); setScriptFile(null); setScriptText(""); }} />
             {file ? (
               <div className="flex items-center justify-center gap-2 text-green-700">
                 <CheckCircle size={18} />
@@ -230,6 +248,31 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
                 <p className="text-sm">Click để chọn file PDF</p>
                 <p className="text-xs mt-1">ETS 2024 Reading hoặc Listening (không cần chia trình độ)</p>
               </div>
+            )}
+          </div>
+
+          {/* Script / Transcript (Listening Part 3-4) */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium">
+                Script / Transcript <span className="text-muted-foreground font-normal">(Listening Part 3–4 — tùy chọn)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => scriptFileRef.current?.click()}
+                disabled={extractingScript}
+                className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50"
+              >
+                <FileUp size={12} />
+                {extractingScript ? "Đang đọc..." : scriptFile ? scriptFile.name : "Upload Script PDF"}
+              </button>
+              <input ref={scriptFileRef} type="file" accept=".pdf" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleScriptPDF(f); }} />
+            </div>
+            {scriptFile && !extractingScript && (
+              <p className="text-xs text-green-600">
+                ✓ {scriptFile.name} — AI sẽ ghép transcript vào câu hỏi Part 3-4
+              </p>
             )}
           </div>
 
@@ -280,10 +323,10 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
           </div>
 
           {/* Step indicator */}
-          {(extracting || parsing || extractingAnswerKey) && (
+          {(extracting || parsing || extractingAnswerKey || extractingScript) && (
             <div className="flex items-center gap-3 text-sm text-muted-foreground bg-muted/50 rounded-lg px-4 py-3">
               <span className="animate-spin text-lg">⏳</span>
-              {extractingAnswerKey ? "Đọc PDF đáp án..." : step === "extracting" ? "Đọc text từ PDF đề thi..." : "AI đang phân tích và cấu trúc câu hỏi..."}
+              {extractingScript ? "Đọc Script PDF..." : extractingAnswerKey ? "Đọc PDF đáp án..." : step === "extracting" ? "Đọc text từ PDF đề thi..." : "AI đang phân tích và ghép transcript vào câu hỏi..."}
             </div>
           )}
 
