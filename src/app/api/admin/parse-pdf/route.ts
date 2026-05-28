@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 300; // up to 5 min for large multi-chunk PDFs
 
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
@@ -20,12 +20,12 @@ export const GRAMMAR_TAXONOMY = [
   "reading_vocabulary_in_context", "listening_comprehension", "other",
 ] as const;
 
-// llama-3.1-8b-instant: 20 000 TPM — higher limit, fast, good enough for extraction
-const EXTRACTION_MODEL = "llama-3.1-8b-instant";
-// Each chunk: ~12 000 chars ≈ 3 000 tokens input + 800 system + 2 500 response ≈ 6 300 tokens
-// → safe under 20 000 TPM per minute with 12-second cooldown between chunks
-const CHUNK_SIZE = 12_000;
-const CHUNK_DELAY_MS = 12_000;
+// llama-3.3-70b-versatile: 12 000 TPM (double the 6 000 TPM of 8b-instant)
+const EXTRACTION_MODEL = "llama-3.3-70b-versatile";
+// Each chunk: ~4 000 chars ≈ 1 000 tokens input + 600 system + 1 500 response ≈ 3 100 tokens
+// Base delay between chunks; 429 handler will override with retry-after value
+const CHUNK_SIZE = 4_000;
+const CHUNK_BASE_DELAY_MS = 5_000; // short — actual wait comes from retry-after if needed
 
 const EXTRACTION_SYSTEM = `You are a precise TOEIC/IELTS question extractor. Extract questions from raw PDF text and return ONLY a valid JSON array.
 
@@ -68,6 +68,41 @@ RULES:
 
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
+/** Call Groq, auto-retry once on 429 using the retry-after header */
+async function groqWithRetry(
+  groq: Groq,
+  messages: { role: "system" | "user"; content: string }[],
+): Promise<string> {
+  const call = () => groq.chat.completions.create({
+    model: EXTRACTION_MODEL,
+    messages,
+    response_format: { type: "json_object" },
+    temperature: 0.1,
+  });
+
+  try {
+    const res = await call();
+    return res.choices[0]?.message?.content ?? "{}";
+  } catch (e: unknown) {
+    // On 429, read retry-after and wait then retry once
+    const status = (e as { status?: number })?.status;
+    if (status === 429) {
+      const retryAfter = (() => {
+        try {
+          const headers = (e as { headers?: Headers })?.headers;
+          const val = headers?.get("retry-after");
+          return val ? (parseInt(val) + 3) * 1000 : 65_000;
+        } catch { return 65_000; }
+      })();
+      console.log(`Rate limited — waiting ${retryAfter / 1000}s`);
+      await sleep(retryAfter);
+      const res = await call();
+      return res.choices[0]?.message?.content ?? "{}";
+    }
+    throw e;
+  }
+}
+
 function parseAnswerKey(text: string): Record<number, number> {
   const map: Record<number, number> = {};
   const LETTER: Record<string, number> = { A: 0, B: 1, C: 2, D: 3 };
@@ -88,16 +123,10 @@ type RawQ = Record<string, unknown>;
 async function extractChunk(
   groq: Groq, chunk: string, exam: string, source: string, answerSection: string
 ): Promise<RawQ[]> {
-  const res = await groq.chat.completions.create({
-    model: EXTRACTION_MODEL,
-    messages: [
-      { role: "system", content: EXTRACTION_SYSTEM },
-      { role: "user", content: `Extract all ${exam} questions from this text chunk. Source: "${source}"\n${answerSection}\n--- TEXT ---\n${chunk}\n--- END ---\n\nReturn JSON array.` },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.1,
-  });
-  const raw = res.choices[0]?.message?.content ?? "{}";
+  const raw = await groqWithRetry(groq, [
+    { role: "system", content: EXTRACTION_SYSTEM },
+    { role: "user", content: `Extract all ${exam} questions from this text chunk. Source: "${source}"\n${answerSection}\n--- TEXT ---\n${chunk}\n--- END ---\n\nReturn JSON array.` },
+  ]);
   const parsed = JSON.parse(raw);
   const arr = Array.isArray(parsed) ? parsed : (parsed.questions ?? parsed.data ?? []);
   return arr as RawQ[];
@@ -131,13 +160,7 @@ Return JSON: {"matches":[{"questionNumbers":[32,33,34],"passage":"full conversat
 - passage = COMPLETE verbatim transcript of the conversation/talk
 - All questions in same group share identical passage`;
 
-  const res = await groq.chat.completions.create({
-    model: EXTRACTION_MODEL,
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
-    temperature: 0.1,
-  });
-  const raw = res.choices[0]?.message?.content ?? "{}";
+  const raw = await groqWithRetry(groq, [{ role: "user", content: prompt }]);
   const { matches = [] } = JSON.parse(raw) as { matches: { questionNumbers: number[]; passage: string }[] };
 
   const passageMap = new Map<number, string>();
@@ -183,7 +206,7 @@ export async function POST(req: Request) {
 
   let allRaw: RawQ[] = [];
   for (let i = 0; i < chunksToProcess.length; i++) {
-    if (i > 0) await sleep(CHUNK_DELAY_MS); // wait between chunks to respect TPM
+    if (i > 0) await sleep(CHUNK_BASE_DELAY_MS); // short delay; retry-after handles 429s
     try {
       const results = await extractChunk(groq, chunksToProcess[i], exam, source, answerSection);
       allRaw = allRaw.concat(results);
@@ -205,7 +228,7 @@ export async function POST(req: Request) {
 
   // ── Match transcripts (script pass) ──────────────────────────────────────
   if (scriptText.trim()) {
-    await sleep(CHUNK_DELAY_MS);
+    await sleep(CHUNK_BASE_DELAY_MS);
     try {
       allRaw = await matchTranscripts(groq, allRaw, scriptText);
     } catch (e) {
