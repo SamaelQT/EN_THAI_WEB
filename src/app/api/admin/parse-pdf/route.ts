@@ -66,9 +66,13 @@ function parseAnswerKey(text: string): Record<number, number> {
       return map;
     }
   } catch { /* not JSON array */ }
-  const re = /\b(1\d{2}|2\d{2})\s*[.:)]\s*([ABCD])\b/gi;
+  // Format: "101. A" | "101: B" | "101) C"
+  const re1 = /\b(\d{1,3})\s*[.:)]\s*([ABCD])\b/gi;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) map[parseInt(m[1])] = LETTER[m[2].toUpperCase()] ?? 0;
+  while ((m = re1.exec(text)) !== null) map[parseInt(m[1])] = LETTER[m[2].toUpperCase()] ?? 0;
+  // Format: "1 (A)" | "2 (B)" — Korean ETS answer key style
+  const re2 = /\b(\d{1,3})\s*\(([ABCD])\)/gi;
+  while ((m = re2.exec(text)) !== null) map[parseInt(m[1])] = LETTER[m[2].toUpperCase()] ?? 0;
   return map;
 }
 

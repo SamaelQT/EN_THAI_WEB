@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, Trash2, RefreshCw, FileJson, BookOpen, FileText, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, Trash2, RefreshCw, FileJson, BookOpen, FileText, CheckCircle, AlertCircle, FileUp } from "lucide-react";
 
 type Question = {
   id: string; exam: string; part: string; type: string; level: string;
@@ -69,18 +69,43 @@ async function extractPDFText(file: File): Promise<string> {
   return pages.join("\n");
 }
 
+/** Extract the TEST N section from a multi-test answer key PDF text */
+function extractTestSection(text: string, testNum: number): string {
+  const curr = new RegExp(`TEST\\s*${testNum}\\b[\\s\\S]*?(?=\\bTEST\\s*${testNum + 1}\\b|$)`, "i");
+  const match = text.match(curr);
+  return match ? match[0] : text;
+}
+
 function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const answerKeyFileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [exam, setExam] = useState("TOEIC");
   const [source, setSource] = useState("");
   const [answerKey, setAnswerKey] = useState("");
+  const [answerKeyFile, setAnswerKeyFile] = useState<File | null>(null);
+  const [answerTestNum, setAnswerTestNum] = useState(1);
+  const [extractingAnswerKey, setExtractingAnswerKey] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ extracted: number; unanswered: number; questions: ParsedQuestion[] } | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [step, setStep] = useState<"idle" | "extracting" | "ai" | "done">("idle");
+
+  async function handleAnswerKeyPDF(f: File, testNum: number) {
+    setAnswerKeyFile(f);
+    setExtractingAnswerKey(true);
+    try {
+      const text = await extractPDFText(f);
+      const section = extractTestSection(text, testNum);
+      setAnswerKey(section || text);
+    } catch {
+      toast.error("Không đọc được PDF đáp án");
+    } finally {
+      setExtractingAnswerKey(false);
+    }
+  }
 
   async function handleParse() {
     if (!file) { toast.error("Chọn file PDF trước"); return; }
@@ -161,7 +186,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
             <span className="bg-muted px-2 py-1 rounded">4. Review & lưu vào DB</span>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Nếu không paste đáp án → AI đặt answer=-1 (chưa có đáp án). Bạn có thể upload lại sau khi có đáp án từ file "ĐÁP ÁN + TRANSCRIPT".
+            Nếu không có đáp án → AI đặt answer=-1. Có thể upload lại sau khi có file đáp án PDF. File đáp án nhiều test → chọn "Test số" để lấy đúng phần.
           </p>
         </CardContent>
       </Card>
@@ -209,23 +234,56 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
           </div>
 
           {/* Answer key */}
-          <div className="space-y-1">
-            <label className="text-xs font-medium">
-              Đáp án — từ file "ĐÁP ÁN + TRANSCRIPT" <span className="text-muted-foreground font-normal">(tùy chọn)</span>
-            </label>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-medium">
+                Đáp án <span className="text-muted-foreground font-normal">(tùy chọn)</span>
+              </label>
+              <div className="flex items-center gap-2">
+                {answerKeyFile && (
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs text-muted-foreground">Test số</label>
+                    <input
+                      type="number" min={1} max={10} value={answerTestNum}
+                      onChange={(e) => {
+                        const n = parseInt(e.target.value) || 1;
+                        setAnswerTestNum(n);
+                        if (answerKeyFile) handleAnswerKeyPDF(answerKeyFile, n);
+                      }}
+                      className="w-12 text-xs border rounded px-1.5 py-0.5 bg-background text-center"
+                    />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => answerKeyFileRef.current?.click()}
+                  disabled={extractingAnswerKey}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50"
+                >
+                  <FileUp size={12} />
+                  {extractingAnswerKey ? "Đang đọc..." : answerKeyFile ? answerKeyFile.name : "Upload PDF đáp án"}
+                </button>
+                <input ref={answerKeyFileRef} type="file" accept=".pdf" className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleAnswerKeyPDF(f, answerTestNum);
+                  }}
+                />
+              </div>
+            </div>
             <textarea
               className="w-full h-20 text-xs font-mono bg-muted/50 border rounded-lg p-3 resize-none"
-              placeholder={"Format 1 — text: 101. A  102. C  103. B  104. D ...\nFormat 2 — JSON: [0, 2, 1, 3, ...] (0=A, 1=B, 2=C, 3=D, bắt đầu từ Q101)"}
+              placeholder={"Format 1 — text: 101. A  102. C  hoặc  1 (A)  2 (B)  3 (C)...\nFormat 2 — JSON: [0, 2, 1, 3, ...] (0=A, 1=B, 2=C, 3=D)"}
               value={answerKey}
               onChange={(e) => setAnswerKey(e.target.value)}
             />
           </div>
 
           {/* Step indicator */}
-          {(extracting || parsing) && (
+          {(extracting || parsing || extractingAnswerKey) && (
             <div className="flex items-center gap-3 text-sm text-muted-foreground bg-muted/50 rounded-lg px-4 py-3">
               <span className="animate-spin text-lg">⏳</span>
-              {step === "extracting" ? "Đọc text từ PDF (client-side)..." : "AI đang phân tích và cấu trúc câu hỏi..."}
+              {extractingAnswerKey ? "Đọc PDF đáp án..." : step === "extracting" ? "Đọc text từ PDF đề thi..." : "AI đang phân tích và cấu trúc câu hỏi..."}
             </div>
           )}
 
