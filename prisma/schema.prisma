@@ -322,6 +322,22 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// ─── Exam Question Bank ───────────────────────────────────────────────────────
+
+model ExamQuestion {
+  id          String   @id @default(cuid()) @map("_id")
+  exam        String   // TOEIC | IELTS
+  part        String   // Part 5 | Part 6 | Part 7 | Listening | Writing | Speaking
+  type        String   // grammar | vocabulary | reading | listening | writing | speaking
+  level       String   // A2 | B1 | B2 | C1
+  question    String
+  options     String[]
+  answer      Int      // 0-3 index
+  explanation String?
+  source      String?  // e.g. "Official TOEIC 2023 Vol.1"
+  createdAt   DateTime @default(now())
+}
+
 // ─── Review / Ôn tập ─────────────────────────────────────────────────────────
 
 model ReviewSet {

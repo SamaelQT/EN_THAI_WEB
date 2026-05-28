@@ -16,6 +16,7 @@ import {
   FlaskConical,
   UsersRound,
   GraduationCap,
+  Database,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -29,6 +30,7 @@ const nav = [
   { href: "/friends", label: "Bạn bè", icon: Users },
   { href: "/study-groups", label: "Nhóm học", icon: UsersRound },
   { href: "/profile", label: "Hồ sơ", icon: User },
+  { href: "/admin", label: "Ngân hàng đề", icon: Database },
 ];
 
 export default function Sidebar({

@@ -36,7 +36,8 @@ Examples: "Simple Future Tense (Thì Tương Lai Đơn)", "Present Perfect (Thì
 TRANSCRIPT RULE: The "transcript" field must contain ONLY English or Thai — no Vietnamese inside it.`;
 
 
-type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string; examType?: string; weekNumber?: number; totalWeeks?: number; dayId?: string };
+type ExamExample = { question: string; options: string[]; answer: number };
+type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string; examType?: string; weekNumber?: number; totalWeeks?: number; dayId?: string; examExamples?: ExamExample[] };
 
 export function topicToSlug(topic: string): string {
   return topic
@@ -52,15 +53,72 @@ export function topicToSlug(topic: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-function buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId }: GenerateRequest): string {
+function buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId, examExamples }: GenerateRequest): string {
   const langLabel = language === "english" ? "tiếng Anh" : "tiếng Thái";
 
+  // ── Detailed exam format specs ────────────────────────────────────────────
   const examContext: Record<string, string> = {
-    TOEIC: `Bài học phục vụ ôn thi TOEIC (Listening & Reading). Tập trung từ vựng kinh doanh/văn phòng, ngữ pháp Part 5-6, chiến lược nghe Part 1-4, đọc hiểu Part 7. Câu quiz mô phỏng định dạng TOEIC Part 5 (điền vào chỗ trống) và Part 7 (đọc hiểu đoạn ngắn).`,
-    IELTS: `Bài học phục vụ ôn thi IELTS Academic. Listening theo Section 1-4, Reading dạng True/False/Not Given & matching headings, Writing Task 1 (biểu đồ/bảng) hoặc Task 2 (argumentative essay), Speaking Part 1-3 với band descriptor. Câu quiz mô phỏng định dạng IELTS thực tế.`,
+    TOEIC: `BỐI CẢNH: Ôn thi TOEIC L&R (ETS format).
+
+TOEIC PART 5 — Incomplete Sentences (grammar/vocab quiz):
+- Each question: one sentence with one blank, 4 options of THE SAME PART OF SPEECH or WORD FORM
+- Distractors: same root word in different forms (submit/submits/submitted/submitting) OR near-synonyms that don't fit grammatically
+- Topics: business email, contracts, HR policy, logistics, office procedures, financial reports
+- Example: "The new policy requires all staff to _____ their expense reports by the 5th of each month." → (A) submit (B) submits (C) submitted (D) submitting
+- NEVER use random everyday topics — always business/professional context
+
+TOEIC PART 6 — Text Completion (reading quiz):
+- Short business text (email/memo/notice) with 4 blanks → each blank has 4 options
+- Text types: internal memo, email thread, announcement, advertisement, form
+
+TOEIC PART 7 — Reading Comprehension (reading passage & quiz):
+- Text types: single passage (email, article, notice, advertisement, form) or double/triple passage
+- Q types: main purpose ("What is the purpose of this email?"), specific detail ("According to the notice, when will..."), inference ("What can be inferred about..."), vocabulary in context ("The word 'expedite' in paragraph 2 is closest in meaning to..."), NOT GIVEN type
+- Passage MUST include: date, sender/recipient (for emails), formal business tone
+- Word count: 150-200 words for single passage
+
+TOEIC LISTENING (listening transcript & quiz):
+- Part 1: photo description — short statements about what's in a picture
+- Part 2: question-response — one question + short answer
+- Part 3: short conversation between 2-3 people in business setting (32 exchanges minimum)
+- Part 4: monologue — announcement, voicemail, advertisement, news report
+- Transcript must sound natural, use contractions, hesitations for realism`,
+
+    IELTS: `BỐI CẢNH: Ôn thi IELTS Academic (British Council/IDP format).
+
+IELTS READING (Academic):
+- Text types: academic article, scientific report, journal excerpt — formal register
+- Q types: True/False/Not Given, Matching headings, Multiple choice, Short answer, Sentence completion
+- Passage: 700-900 words (in real test), for lesson use 180-220 words with 3-4 paragraphs
+
+IELTS LISTENING:
+- Section 1: conversation between 2 speakers, everyday social context (e.g. booking, enquiry)
+- Section 2: monologue, everyday social context (e.g. tour guide, announcement)
+- Section 3: conversation up to 4 speakers, educational context (e.g. seminar, tutorial)
+- Section 4: academic lecture/talk — formal vocabulary, complex ideas
+- Q types: form completion, note completion, multiple choice, matching
+
+IELTS WRITING:
+- Task 1: describe visual data (graph, chart, diagram, map) — 150+ words, objective tone, no personal opinion
+- Task 2: argumentative/discursive essay — 250+ words, clear position, 4-5 paragraphs structure
+
+IELTS SPEAKING:
+- Part 1: personal questions about familiar topics (2-4 minutes)
+- Part 2: individual long turn — describe something using cue card (1-2 minutes)
+- Part 3: two-way discussion, abstract topics related to Part 2 theme (4-5 minutes)`,
+
     general: `Bài học theo khung CEFR tổng quát, tập trung giao tiếp thực tế và ngữ pháp nền tảng.`,
   };
-  const examNote = examType && examContext[examType] ? `\nBỐI CẢNH THI: ${examContext[examType]}\n` : "";
+  const examNote = examType && examContext[examType] ? `\n${examContext[examType]}\n` : "";
+
+  // ── Inject real exam examples from DB ─────────────────────────────────────
+  let examplesSection = "";
+  if (examExamples && examExamples.length > 0) {
+    const formatted = examExamples.map((ex, i) =>
+      `Example ${i + 1}:\nQ: "${ex.question}"\nOptions: ${ex.options.map((o, idx) => `(${String.fromCharCode(65 + idx)}) ${o}`).join(" | ")}\nAnswer: (${String.fromCharCode(65 + ex.answer)}) ${ex.options[ex.answer]}`
+    ).join("\n\n");
+    examplesSection = `\n=== REAL ${examType} QUESTIONS — Model your quiz questions EXACTLY on this style, difficulty, and format ===\n${formatted}\n`;
+  }
 
   // Per-lesson-type quiz specification
   const quizSpecs: Record<string, string> = {
@@ -215,7 +273,7 @@ YÊU CẦU: words có 8 từ quan trọng nhất của chủ đề tuần. Quiz 
   }
 
   return `Create a ${lessonType} lesson in ${langLabel} for CEFR level ${level}.
-${topicLine}${weekContext}${examNote}
+${topicLine}${weekContext}${examNote}${examplesSection}
 === QUIZ SPECIFICATION (follow exactly) ===
 ${quizRequirements}
 
@@ -372,8 +430,23 @@ async function callAI(prompt: string): Promise<any> {
 
 // ── generateLesson ─────────────────────────────────────────────────────────
 
+async function fetchExamExamples(examType: string | undefined, lessonType: string): Promise<ExamExample[]> {
+  if (!examType || (examType !== "TOEIC" && examType !== "IELTS")) return [];
+  try {
+    const rows = await prisma.examQuestion.findMany({
+      where: { exam: examType, type: lessonType },
+      take: 3,
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map((r) => ({ question: r.question, options: r.options, answer: r.answer }));
+  } catch {
+    return [];
+  }
+}
+
 export async function generateLesson(lessonType: string, language: string, level: string, topic?: string, userId?: string, examType?: string, weekNumber?: number, totalWeeks?: number, dayId?: string) {
   if (!lessonType || !language || !level) throw new Error("Missing fields");
+  const examExamples = await fetchExamExamples(examType, lessonType);
 
   // Roadmap day lesson: each day gets its own unique cached content
   if (dayId) {
@@ -397,7 +470,7 @@ export async function generateLesson(lessonType: string, language: string, level
       throw err;
     }
 
-    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId }));
+    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId, examExamples }));
 
     if (!alreadyCompleted) {
       await prisma.lesson.upsert({
@@ -434,7 +507,7 @@ export async function generateLesson(lessonType: string, language: string, level
       throw err;
     }
 
-    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks }));
+    const lesson = await callAI(buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, examExamples }));
 
     // Only cache if first time (not a variant for completed lesson)
     if (!alreadyCompleted) {
@@ -481,7 +554,7 @@ export async function generateLesson(lessonType: string, language: string, level
     throw err;
   }
 
-  const lesson = await callAI(buildPrompt({ lessonType, language, level }));
+  const lesson = await callAI(buildPrompt({ lessonType, language, level, examExamples }));
   await prisma.lesson.upsert({
     where: { id: lessonId },
     update: { content: JSON.stringify(lesson), title: lesson.title ?? lessonId },

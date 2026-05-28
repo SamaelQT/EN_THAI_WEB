@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDays, Target, AlertTriangle, Info, Trash2 } from "lucide-react";
+import { CalendarDays, Target, AlertTriangle, Info, Trash2, Zap } from "lucide-react";
 
 type PlacementTest = {
   id: string;
@@ -564,11 +564,74 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
   );
 }
 
+// Default kept types per exam
+function defaultKeepTypes(exam: string | null): Set<string> {
+  if (exam === "TOEIC") return new Set(["grammar", "vocabulary", "reading", "listening", "review"]);
+  if (exam === "IELTS") return new Set(["grammar", "vocabulary", "reading", "listening", "writing", "review"]);
+  return new Set(["grammar", "vocabulary", "reading", "listening", "speaking", "writing", "review", "pronunciation"]);
+}
+
+const LESSON_TYPE_VI: Record<string, string> = {
+  grammar: "Ngữ pháp", vocabulary: "Từ vựng", reading: "Đọc hiểu",
+  listening: "Nghe", writing: "Viết", speaking: "Nói",
+  pronunciation: "Phát âm", review: "Ôn tập",
+};
+
 function RoadmapCard({ roadmap }: { roadmap: Roadmap }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [compressOpen, setCompressOpen] = useState(false);
+  const [compressing, setCompressing] = useState(false);
+  const [keepTypes, setKeepTypes] = useState<Set<string>>(() => defaultKeepTypes(roadmap.targetExam));
+  const [daysTarget, setDaysTarget] = useState(30);
   const meta = LANG_META[roadmap.language as keyof typeof LANG_META];
+
+  // Compute incomplete days breakdown
+  const incompleteDays = roadmap.weeks
+    .filter((w) => w.status !== "completed")
+    .flatMap((w) => w.days.filter((d) => d.status !== "completed"));
+
+  const typeCount: Record<string, number> = {};
+  incompleteDays.forEach((d) => {
+    typeCount[d.lessonType] = (typeCount[d.lessonType] ?? 0) + 1;
+  });
+  const availableTypes = Object.keys(typeCount);
+
+  // Preview calculation
+  const filteredCount = incompleteDays.filter((d) => keepTypes.has(d.lessonType)).length;
+  const selectedCount = Math.min(filteredCount, daysTarget);
+  const droppedCount = filteredCount - selectedCount;
+  const newWeeksCount = Math.ceil(selectedCount / 5);
+
+  function toggleType(t: string) {
+    setKeepTypes((prev) => {
+      const next = new Set(prev);
+      next.has(t) ? next.delete(t) : next.add(t);
+      return next;
+    });
+  }
+
+  async function handleCompress() {
+    if (selectedCount === 0) { return; }
+    setCompressing(true);
+    try {
+      const res = await fetch("/api/roadmap/compress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roadmapId: roadmap.id, keepTypes: [...keepTypes], daysTarget }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success(`Đã rút gọn! ${data.selectedDaysCount} bài trong ${data.newWeekCount} tuần.`);
+      setCompressOpen(false);
+      router.refresh();
+    } catch {
+      toast.error("Không thể rút gọn lộ trình. Thử lại sau.");
+    } finally {
+      setCompressing(false);
+    }
+  }
 
   async function handleDelete() {
     if (!confirm(`Xóa lộ trình ${meta?.label ?? roadmap.language}? Toàn bộ tiến trình sẽ mất.`)) return;
@@ -625,11 +688,23 @@ function RoadmapCard({ roadmap }: { roadmap: Roadmap }) {
               {FOCUS_LABEL[roadmap.learningFocus] ?? roadmap.learningFocus}
             </Badge>
           </CardTitle>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span className="flex items-center gap-1 text-sm text-muted-foreground">
               <CalendarDays size={14} />
               {daysLeft > 0 ? `Còn ${daysLeft} ngày` : "Đã hết hạn"}
             </span>
+            {incompleteDays.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1 text-amber-600 border-amber-300 hover:bg-amber-50"
+                onClick={() => setCompressOpen(true)}
+                title="Rút gọn lộ trình"
+              >
+                <Zap size={12} />
+                Rút gọn
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -724,6 +799,145 @@ function RoadmapCard({ roadmap }: { roadmap: Roadmap }) {
           </div>
         )}
       </CardContent>
+
+      {/* ── Compress Modal ── */}
+      {compressOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={() => !compressing && setCompressOpen(false)}
+        >
+          <div
+            className="bg-background rounded-xl shadow-xl w-full max-w-md p-6 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-amber-100">
+                <Zap className="text-amber-600" size={18} />
+              </div>
+              <div>
+                <h3 className="font-semibold">Rút gọn lộ trình</h3>
+                <p className="text-xs text-muted-foreground">Tập trung vào bài quan trọng trước kỳ thi</p>
+              </div>
+            </div>
+
+            {/* Current state */}
+            <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Bài chưa học:</span>
+                <span className="font-medium">{incompleteDays.length} bài</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Hạn hiện tại:</span>
+                <span className="font-medium">{differenceInDays(new Date(roadmap.targetDate), new Date())} ngày nữa</span>
+              </div>
+            </div>
+
+            {/* Target days */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Số ngày mục tiêu</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={7}
+                  max={Math.max(incompleteDays.length, 7)}
+                  value={daysTarget}
+                  onChange={(e) => setDaysTarget(Number(e.target.value))}
+                  className="flex-1 accent-amber-500"
+                />
+                <span className="text-sm font-bold w-14 text-right">{daysTarget} ngày</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Deadline mới: {new Date(Date.now() + daysTarget * 86400000).toLocaleDateString("vi-VN")}</p>
+            </div>
+
+            {/* Lesson types to keep */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Giữ lại loại bài</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {availableTypes.map((t) => {
+                  const checked = keepTypes.has(t);
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => toggleType(t)}
+                      className={`flex items-center justify-between text-xs px-3 py-2 rounded-lg border-2 transition-colors ${
+                        checked
+                          ? "border-amber-400 bg-amber-50 text-amber-800"
+                          : "border-border bg-muted/30 text-muted-foreground"
+                      }`}
+                    >
+                      <span>{LESSON_TYPE_VI[t] ?? t}</span>
+                      <span className={`font-bold ${checked ? "text-amber-600" : ""}`}>
+                        {typeCount[t]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Preview */}
+            <div className={`rounded-lg p-3 text-sm space-y-1 ${selectedCount > 0 ? "bg-green-50 border border-green-200" : "bg-red-50 border border-red-200"}`}>
+              <p className="font-medium text-sm mb-1">
+                {selectedCount > 0 ? "📋 Kết quả rút gọn" : "⚠️ Không có bài nào được chọn"}
+              </p>
+              {selectedCount > 0 && (
+                <>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Bài được giữ:</span>
+                    <span className="font-semibold text-green-700">{selectedCount} bài</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Tuần mới:</span>
+                    <span className="font-semibold">{newWeeksCount} tuần (~5 bài/tuần)</span>
+                  </div>
+                  {droppedCount > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Bài bị loại bỏ:</span>
+                      <span className="font-semibold text-amber-600">{droppedCount} bài</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Warning */}
+            <div className="flex items-start gap-2 text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+              <span>Hành động này không thể hoàn tác. Các tuần chưa học sẽ được tái cơ cấu lại. Tiến độ đã hoàn thành vẫn được giữ nguyên.</span>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setCompressOpen(false)}
+                disabled={compressing}
+                className="flex-1 py-2 rounded-lg border text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleCompress}
+                disabled={compressing || selectedCount === 0}
+                className="flex-1 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {compressing ? (
+                  <>
+                    <span className="animate-spin">⏳</span> Đang xử lý...
+                  </>
+                ) : (
+                  <>
+                    <Zap size={14} /> Xác nhận rút gọn
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
