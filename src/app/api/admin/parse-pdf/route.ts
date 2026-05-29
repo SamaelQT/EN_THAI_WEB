@@ -219,25 +219,39 @@ export async function POST(req: Request) {
 
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-  // ── Split into chunks with overlap to avoid missing boundary questions ────
-  const OVERLAP = 500; // chars of overlap between chunks
-  const chunks: string[] = [];
-  for (let i = 0; i < questionText.length; i += CHUNK_SIZE - OVERLAP) {
-    chunks.push(questionText.slice(i, i + CHUNK_SIZE));
-    if (i + CHUNK_SIZE >= questionText.length) break;
-  }
-  // Cap at 6 chunks (72 000 chars) — enough for any single exam part
-  const chunksToProcess = chunks.slice(0, 6);
+  // ── Single-shot if text is small enough; otherwise chunk ─────────────────
+  // Single-shot: ≤ 10 000 chars ≈ 2 500 tokens input + overhead < 12 000 TPM
+  // This avoids multi-chunk delays for typical single-test TXT files (~14 KB)
+  const SINGLE_SHOT_LIMIT = 10_000;
+  const OVERLAP = 400;
 
   let allRaw: RawQ[] = [];
-  for (let i = 0; i < chunksToProcess.length; i++) {
-    if (i > 0) await sleep(CHUNK_BASE_DELAY_MS); // short delay; retry-after handles 429s
+
+  if (questionText.length <= SINGLE_SHOT_LIMIT) {
+    // Small file → one request, no delays
     try {
-      const results = await extractChunk(groq, chunksToProcess[i], exam, source, answerSection);
-      allRaw = allRaw.concat(results);
+      const results = await extractChunk(groq, questionText, exam, source, answerSection);
+      allRaw = results;
     } catch (e) {
-      // Non-fatal: log and continue — partial results still useful
-      console.error(`Chunk ${i + 1} failed:`, e);
+      console.error("Single-shot extraction failed:", e);
+    }
+  } else {
+    // Large file → chunk with overlap
+    const chunks: string[] = [];
+    for (let i = 0; i < questionText.length; i += CHUNK_SIZE - OVERLAP) {
+      chunks.push(questionText.slice(i, i + CHUNK_SIZE));
+      if (i + CHUNK_SIZE >= questionText.length) break;
+    }
+    const chunksToProcess = chunks.slice(0, 6);
+
+    for (let i = 0; i < chunksToProcess.length; i++) {
+      if (i > 0) await sleep(CHUNK_BASE_DELAY_MS);
+      try {
+        const results = await extractChunk(groq, chunksToProcess[i], exam, source, answerSection);
+        allRaw = allRaw.concat(results);
+      } catch (e) {
+        console.error(`Chunk ${i + 1} failed:`, e);
+      }
     }
   }
 
@@ -292,7 +306,6 @@ export async function POST(req: Request) {
   return NextResponse.json({
     extracted: normalized.length,
     unanswered: normalized.filter(q => q.answer === -1).length,
-    chunks: chunksToProcess.length,
     questions: normalized,
   });
 }
