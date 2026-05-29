@@ -117,11 +117,25 @@ function parseAnswerKey(text: string): Record<number, number> {
     const arr = JSON.parse(text);
     if (Array.isArray(arr)) { arr.forEach((v: number, i: number) => { map[101 + i] = v; }); return map; }
   } catch { /* not JSON */ }
+  // Format: "101. A" | "101: B" | "101) C"
   const re1 = /\b(\d{1,3})\s*[.:)]\s*([ABCD])\b/gi;
   let m: RegExpExecArray | null;
   while ((m = re1.exec(text)) !== null) map[parseInt(m[1])] = LETTER[m[2].toUpperCase()] ?? 0;
+  // Format: "1 (A)" | "2 (B)" — Korean ETS style
   const re2 = /\b(\d{1,3})\s*\(([ABCD])\)/gi;
   while ((m = re2.exec(text)) !== null) map[parseInt(m[1])] = LETTER[m[2].toUpperCase()] ?? 0;
+  // Format: "32 D 33 B" — space only, no punctuation (OCR table export)
+  const re3 = /\b(\d{1,3})\s+([ABCD])\b/gi;
+  while ((m = re3.exec(text)) !== null) {
+    const n = parseInt(m[1]);
+    if (map[n] === undefined) map[n] = LETTER[m[2].toUpperCase()] ?? 0;
+  }
+  // Format: "B 32 D 33" — letter BEFORE number (some OCR column layouts)
+  const re4 = /\b([ABCD])\s+(\d{1,3})\b/gi;
+  while ((m = re4.exec(text)) !== null) {
+    const n = parseInt(m[2]);
+    if (map[n] === undefined) map[n] = LETTER[m[1].toUpperCase()] ?? 0;
+  }
   return map;
 }
 
@@ -205,10 +219,12 @@ export async function POST(req: Request) {
 
   const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-  // ── Split into chunks and extract ─────────────────────────────────────────
+  // ── Split into chunks with overlap to avoid missing boundary questions ────
+  const OVERLAP = 500; // chars of overlap between chunks
   const chunks: string[] = [];
-  for (let i = 0; i < questionText.length; i += CHUNK_SIZE) {
+  for (let i = 0; i < questionText.length; i += CHUNK_SIZE - OVERLAP) {
     chunks.push(questionText.slice(i, i + CHUNK_SIZE));
+    if (i + CHUNK_SIZE >= questionText.length) break;
   }
   // Cap at 6 chunks (72 000 chars) — enough for any single exam part
   const chunksToProcess = chunks.slice(0, 6);
