@@ -136,17 +136,21 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
     let text = "";
     try {
       if (hasManual) {
-        // Use manually pasted text directly
         text = manualText;
+      } else if (file!.name.endsWith(".txt")) {
+        // Plain text file — read directly
+        setStep("extracting");
+        setExtracting(true);
+        text = await file!.text();
+        setExtracting(false);
       } else {
-        // Step 1: extract text from PDF client-side
+        // PDF — extract text client-side with pdfjs-dist
         setStep("extracting");
         setExtracting(true);
         text = await extractPDFText(file!);
         setExtracting(false);
 
         if (!text.trim()) {
-          // Image-based PDF → show manual input fallback
           setShowManualInput(true);
           throw new Error("PDF dạng scan (image-based) — không đọc được text trực tiếp.\n\nCách fix: mở PDF trong Google Drive → chuột phải → Mở bằng Google Tài liệu → Google tự OCR → copy toàn bộ text → paste vào ô \"Paste text thủ công\" bên dưới.");
         }
@@ -259,7 +263,7 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
             className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${file ? "border-green-400 bg-green-50 dark:bg-green-950/20" : "border-border hover:border-primary/50"}`}
             onClick={() => fileRef.current?.click()}
           >
-            <input ref={fileRef} type="file" accept=".pdf" className="hidden"
+            <input ref={fileRef} type="file" accept=".pdf,.txt" className="hidden"
               onChange={(e) => { setFile(e.target.files?.[0] ?? null); setStep("idle"); setResult(null); setScriptFile(null); setScriptText(""); setManualText(""); setShowManualInput(false); }} />
             {file ? (
               <div className="flex items-center justify-center gap-2 text-green-700">
@@ -270,8 +274,8 @@ function ParsePDFTab({ onSaved }: { onSaved: () => void }) {
             ) : (
               <div className="text-muted-foreground">
                 <FileText size={32} className="mx-auto mb-2 opacity-40" />
-                <p className="text-sm">Click để chọn file PDF</p>
-                <p className="text-xs mt-1">ETS 2024 Reading hoặc Listening (không cần chia trình độ)</p>
+                <p className="text-sm">Click để chọn file PDF hoặc TXT</p>
+                <p className="text-xs mt-1">PDF text-layer hoặc .txt (OCR từ Google Drive)</p>
               </div>
             )}
           </div>
