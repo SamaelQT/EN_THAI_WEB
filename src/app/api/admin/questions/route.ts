@@ -27,7 +27,7 @@ function validateQuestion(q: unknown, index: number): string | null {
   return null;
 }
 
-// GET: list questions (filterable)
+// GET: list questions or source summary
 export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,6 +36,41 @@ export async function GET(req: Request) {
   const exam = searchParams.get("exam") ?? undefined;
   const type = searchParams.get("type") ?? undefined;
   const part = searchParams.get("part") ?? undefined;
+  const view = searchParams.get("view"); // "sources" = grouped summary
+
+  const stats = await prisma.examQuestion.groupBy({
+    by: ["exam", "type"],
+    _count: { id: true },
+  });
+
+  if (view === "sources") {
+    // Group by source — return one row per uploaded file
+    const rows = await prisma.examQuestion.groupBy({
+      by: ["source", "exam"],
+      _count: { id: true },
+      where: { ...(exam ? { exam } : {}) },
+      orderBy: { _count: { id: "desc" } },
+    });
+    // Get type breakdown per source
+    const typeRows = await prisma.examQuestion.groupBy({
+      by: ["source", "type"],
+      _count: { id: true },
+      where: { ...(exam ? { exam } : {}) },
+    });
+    const typeMap: Record<string, string[]> = {};
+    for (const r of typeRows) {
+      if (!r.source) continue;
+      if (!typeMap[r.source]) typeMap[r.source] = [];
+      typeMap[r.source].push(r.type);
+    }
+    const sources = rows.map(r => ({
+      source: r.source ?? "(unknown)",
+      exam: r.exam,
+      count: r._count.id,
+      types: typeMap[r.source ?? ""] ?? [],
+    }));
+    return NextResponse.json({ sources, stats });
+  }
 
   const questions = await prisma.examQuestion.findMany({
     where: {
@@ -45,11 +80,6 @@ export async function GET(req: Request) {
     },
     orderBy: { createdAt: "desc" },
     take: 200,
-  });
-
-  const stats = await prisma.examQuestion.groupBy({
-    by: ["exam", "type"],
-    _count: { id: true },
   });
 
   return NextResponse.json({ questions, stats });
@@ -94,16 +124,23 @@ export async function POST(req: Request) {
   return NextResponse.json({ success: true, inserted: data.length });
 }
 
-// DELETE: clear by exam (for re-upload)
+// DELETE: clear by source or by exam (for re-upload)
 export async function DELETE(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
+  const source = searchParams.get("source");
   const exam = searchParams.get("exam");
   const type = searchParams.get("type");
 
-  if (!exam) return NextResponse.json({ error: "exam param required" }, { status: 400 });
+  // Delete by source (from Library tab)
+  if (source) {
+    const result = await prisma.examQuestion.deleteMany({ where: { source } });
+    return NextResponse.json({ deleted: result.count });
+  }
+
+  if (!exam) return NextResponse.json({ error: "exam or source param required" }, { status: 400 });
 
   const result = await prisma.examQuestion.deleteMany({
     where: { exam, ...(type ? { type } : {}) },

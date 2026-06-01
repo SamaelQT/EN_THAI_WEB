@@ -560,28 +560,38 @@ function JSONUploadTab({ stats, onSaved }: { stats: Stat[]; onSaved: () => void 
 
 // ── Library tab ────────────────────────────────────────────────────────────
 
+type SourceSummary = { source: string; exam: string; count: number; types: string[] };
+
 function LibraryTab() {
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [sources, setSources] = useState<SourceSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterExam, setFilterExam] = useState("ALL");
-  const [filterType, setFilterType] = useState("ALL");
 
   async function load() {
     setLoading(true);
-    const p = new URLSearchParams();
+    const p = new URLSearchParams({ view: "sources" });
     if (filterExam !== "ALL") p.set("exam", filterExam);
-    if (filterType !== "ALL") p.set("type", filterType);
     const res = await fetch(`/api/admin/questions?${p}`);
     const data = await res.json();
-    setQuestions(data.questions ?? []);
+    setSources(data.sources ?? []);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [filterExam, filterType]);
+  async function deleteSource(source: string) {
+    if (!confirm(`Xóa toàn bộ câu hỏi từ "${source}"?`)) return;
+    const res = await fetch(`/api/admin/questions?source=${encodeURIComponent(source)}`, { method: "DELETE" });
+    const d = await res.json();
+    toast.success(`Đã xóa ${d.deleted} câu`);
+    load();
+  }
+
+  useEffect(() => { load(); }, [filterExam]);
+
+  const total = sources.reduce((s, r) => s + r.count, 0);
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-3">
         <div className="flex gap-1">
           {["ALL", "TOEIC", "IELTS"].map((e) => (
             <button key={e} onClick={() => setFilterExam(e)}
@@ -590,44 +600,34 @@ function LibraryTab() {
             </button>
           ))}
         </div>
-        <div className="flex gap-1 flex-wrap">
-          {["ALL", "grammar", "vocabulary", "reading", "listening"].map((t) => (
-            <button key={t} onClick={() => setFilterType(t)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filterType === t ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"}`}>
-              {t === "ALL" ? "Tất cả" : (TYPE_LABELS[t] ?? t)}
-            </button>
-          ))}
-        </div>
+        <span className="text-xs text-muted-foreground ml-2">{total} câu từ {sources.length} nguồn</span>
         <Button variant="ghost" size="sm" className="ml-auto" onClick={load}><RefreshCw size={14} /></Button>
       </div>
 
       {loading ? <p className="text-sm text-muted-foreground">Đang tải...</p> :
-        questions.length === 0 ? (
-          <Card><CardContent className="pt-8 pb-8 text-center text-muted-foreground"><p>Chưa có câu hỏi nào.</p></CardContent></Card>
+        sources.length === 0 ? (
+          <Card><CardContent className="pt-8 pb-8 text-center text-muted-foreground"><p>Chưa có dữ liệu nào.</p></CardContent></Card>
         ) : (
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">{questions.length} câu hỏi</p>
-            {questions.map((q, i) => (
-              <Card key={q.id}>
+            {sources.map((s) => (
+              <Card key={s.source}>
                 <CardContent className="pt-3 pb-3">
-                  <div className="flex items-start gap-3">
-                    <span className="text-xs text-muted-foreground w-6 shrink-0">{i + 1}</span>
+                  <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
-                      <div className="flex gap-1.5 flex-wrap mb-1.5">
-                        <Badge variant="secondary" className="text-xs">{q.exam}</Badge>
-                        <Badge variant="outline" className="text-xs">{q.part}</Badge>
-                        <Badge variant="outline" className="text-xs">{TYPE_LABELS[q.type] ?? q.type}</Badge>
-                        {q.grammarPoint && <Badge variant="outline" className="text-xs text-blue-600">{q.grammarPoint}</Badge>}
-                        {q.source && <span className="text-xs text-muted-foreground">{q.source}</span>}
-                      </div>
-                      <p className="text-sm">{q.question}</p>
-                      <div className="grid grid-cols-2 gap-1 mt-1.5">
-                        {q.options.map((opt, idx) => (
-                          <span key={idx} className={`text-xs px-2 py-0.5 rounded ${idx === q.answer ? "bg-green-100 text-green-700 font-medium" : "bg-muted text-muted-foreground"}`}>
-                            ({String.fromCharCode(65 + idx)}) {opt}
-                          </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium truncate">{s.source}</span>
+                        <Badge variant="secondary" className="text-xs shrink-0">{s.exam}</Badge>
+                        {s.types.map(t => (
+                          <Badge key={t} variant="outline" className="text-xs shrink-0">{TYPE_LABELS[t] ?? t}</Badge>
                         ))}
                       </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-sm font-semibold text-primary">{s.count} câu</span>
+                      <button onClick={() => deleteSource(s.source)}
+                        className="text-xs text-destructive hover:underline flex items-center gap-1">
+                        <Trash2 size={12} /> Xóa
+                      </button>
                     </div>
                   </div>
                 </CardContent>
