@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const set = await getOrGenerateReviewSet(language, type as ReviewType, topic, level);
+    const set = await getOrGenerateReviewSet(language, type as ReviewType, topic, level, session.user.id);
     return NextResponse.json({ set });
   } catch (e: any) {
     console.error("[review/generate]", e);

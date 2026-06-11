@@ -414,9 +414,24 @@ export async function completeLesson(
 
 // ── ETS quiz replacement ───────────────────────────────────────────────────
 
+/** Fisher-Yates shuffle, returns a new array */
+function shuffleArr<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 /**
- * Try to find 6 real ETS questions for this lesson type + topic.
- * Returns null if not enough questions exist (AI quiz will be used instead).
+ * Try to find real ETS questions that match this lesson's topic.
+ *
+ * Design principle: the quiz must test what the lesson teaches.
+ * - Lessons with a topic (grammar/vocab): ONLY use topic-matched questions.
+ *   If fewer than 6 match → return null so the AI quiz (which IS topic-specific) is used instead.
+ * - Review lessons (no specific topic): broader fallback is acceptable.
+ * - Always shuffle so users see different questions each visit.
  */
 async function getETSQuiz(
   examType: string | undefined,
@@ -426,7 +441,6 @@ async function getETSQuiz(
 ): Promise<{ q: string; options: string[]; answer: number }[] | null> {
   if (!examType || (examType !== "TOEIC" && examType !== "IELTS")) return null;
 
-  // Map lesson type → ETS question type
   const typeMap: Record<string, string[]> = {
     grammar: ["grammar"],
     vocabulary: ["vocabulary"],
@@ -437,7 +451,10 @@ async function getETSQuiz(
   const types = typeMap[lessonType];
   if (!types) return null;
 
+  const isReview = lessonType === "review";
+
   // Extract keywords from topic for grammarPoint matching
+  // e.g. "Present Perfect Tense (Thì Hiện Tại Hoàn Thành)" → ["present","perfect","tense","hiện","hoàn","thành"]
   const topicKeywords = topic
     ? topic
         .toLowerCase()
@@ -449,45 +466,52 @@ async function getETSQuiz(
   const baseWhere = {
     exam: examType,
     type: { in: types },
-    answer: { gte: 0 }, // exclude unanswered (-1)
+    answer: { gte: 0 },
     ...(level ? { level } : {}),
   };
 
-  // 1. Try topic-matched + exact level
+  // ── Step 1: Topic-matched (strict) ──────────────────────────────────────
+  // Take a larger pool (50) then shuffle so every visit returns different questions.
   if (topicKeywords.length > 0) {
-    const topicMatched = await prisma.examQuestion.findMany({
+    const pool = await prisma.examQuestion.findMany({
       where: {
         ...baseWhere,
         OR: topicKeywords.map((kw) => ({
           grammarPoint: { contains: kw, mode: "insensitive" as const },
         })),
       },
-      take: 6,
-      orderBy: { createdAt: "asc" },
+      take: 50,
     });
-    if (topicMatched.length >= 10) {
-      return topicMatched.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
+    if (pool.length >= 6) {
+      const picked = shuffleArr(pool).slice(0, 10);
+      return picked.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
     }
+    // Not enough topic-relevant questions → for non-review lessons, let AI quiz stay
+    // (AI quiz is generated specifically for this topic and is more relevant than
+    //  randomly pulling unrelated grammar/vocab questions from the DB)
+    if (!isReview) return null;
   }
 
-  // 2. Any questions of this type at exact level
-  const levelMatched = await prisma.examQuestion.findMany({
-    where: baseWhere,
-    take: 10,
-    orderBy: { createdAt: "asc" },
-  });
-  if (levelMatched.length >= 10) {
-    return levelMatched.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
-  }
+  // ── Step 2: Broader fallback — only for review / no-topic lessons ────────
+  if (isReview || !topic) {
+    const pool = await prisma.examQuestion.findMany({
+      where: baseWhere,
+      take: 80,
+    });
+    if (pool.length >= 10) {
+      const picked = shuffleArr(pool).slice(0, 10);
+      return picked.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
+    }
 
-  // 3. Fallback: ignore level (use any available — better than AI-generated for ETS exams)
-  const fallback = await prisma.examQuestion.findMany({
-    where: { exam: examType, type: { in: types }, answer: { gte: 0 } },
-    take: 10,
-    orderBy: { createdAt: "asc" },
-  });
-  if (fallback.length >= 10) {
-    return fallback.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
+    // Step 3: Ignore level
+    const fallback = await prisma.examQuestion.findMany({
+      where: { exam: examType, type: { in: types }, answer: { gte: 0 } },
+      take: 80,
+    });
+    if (fallback.length >= 10) {
+      const picked = shuffleArr(fallback).slice(0, 10);
+      return picked.map((q) => ({ q: q.question, options: q.options, answer: q.answer }));
+    }
   }
 
   return null; // not enough — AI generates quiz

@@ -8,6 +8,7 @@ export type ReviewType =
   | "quiz_30"
   | "simulation_b1"
   | "simulation_toeic"
+  | "simulation_ielts"
   | "simulation_cutfl";
 
 const QUESTION_COUNT: Record<ReviewType, number> = {
@@ -17,6 +18,7 @@ const QUESTION_COUNT: Record<ReviewType, number> = {
   quiz_30: 35,
   simulation_b1: 35,
   simulation_toeic: 35,
+  simulation_ielts: 35,
   simulation_cutfl: 35,
 };
 
@@ -27,6 +29,7 @@ const DURATION: Record<ReviewType, number> = {
   quiz_30: 30,
   simulation_b1: 30,
   simulation_toeic: 30,
+  simulation_ielts: 30,
   simulation_cutfl: 30,
 };
 
@@ -49,7 +52,8 @@ function buildPrompt(
     quiz_15: `Mixed 15-minute quiz (vocabulary + grammar) for ${level} level ${lang}. Topic: ${topic}.`,
     quiz_30: `Mixed 30-minute quiz (vocabulary + grammar + reading comprehension) for ${level} level ${lang}. Topic: ${topic}.`,
     simulation_b1: `Simulate a B1 level ${lang} proficiency test. Mix of grammar, vocabulary, and reading comprehension at B1 level.`,
-    simulation_toeic: `Simulate a TOEIC test. Include Part 5 (incomplete sentences) and Part 7 (reading comprehension) style questions at intermediate level.`,
+    simulation_toeic: `Simulate a TOEIC Part 5 (incomplete sentence grammar/vocab) test. ${count} questions at B1-B2 business English level. Each question is one sentence with one blank and 4 options.`,
+    simulation_ielts: `Simulate an IELTS Academic reading comprehension test. ${count} questions including True/False/Not Given, multiple choice, and vocabulary in context at B2-C1 level.`,
     simulation_cutfl: `Simulate a CU-TFL Thai proficiency test. Mix of vocabulary, grammar, and reading comprehension for Thai language.`,
   };
 
@@ -82,26 +86,147 @@ Rules:
 - No duplicate questions`;
 }
 
+/** Fisher-Yates shuffle */
+function shuffleArr<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * Try to pull real ETS questions from the DB for simulation types.
+ * Returns null if not enough questions are available.
+ */
+async function getETSSimulationQuestions(
+  exam: "TOEIC" | "IELTS",
+  count: number,
+): Promise<{ order: number; question: string; options: string[]; answer: number; explanation: string | null }[] | null> {
+  const types = exam === "TOEIC" ? ["grammar", "vocabulary"] : ["reading", "grammar"];
+  const pool = await prisma.examQuestion.findMany({
+    where: { exam, type: { in: types }, answer: { gte: 0 } },
+    take: count * 4, // large pool for better shuffle variety
+  });
+  if (pool.length < count) return null;
+
+  return shuffleArr(pool).slice(0, count).map((q, i) => ({
+    order: i + 1,
+    question: q.question,
+    options: q.options,
+    answer: q.answer,
+    explanation: q.explanation ?? null,
+  }));
+}
+
+/**
+ * Get topics the user has recently studied (from completed lessons).
+ * Used to personalise grammar/vocabulary review prompts.
+ */
+export async function getUserStudiedTopics(userId: string, language: string): Promise<string[]> {
+  const progresses = await prisma.lessonProgress.findMany({
+    where: { userId },
+    orderBy: { completedAt: "desc" },
+    take: 30,
+  });
+
+  if (progresses.length === 0) return [];
+
+  // Fetch the actual lesson titles
+  const lessonIds = [...new Set(progresses.map((p) => p.lessonId))];
+  const lessons = await prisma.lesson.findMany({
+    where: { id: { in: lessonIds }, language },
+    select: { id: true, title: true },
+  });
+  const titleMap = new Map(lessons.map((l) => [l.id, l.title]));
+
+  // Return unique titles in recency order
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const p of progresses) {
+    const title = titleMap.get(p.lessonId);
+    if (title && !seen.has(title)) {
+      seen.add(title);
+      result.push(title);
+      if (result.length >= 10) break;
+    }
+  }
+  return result;
+}
+
 export async function getOrGenerateReviewSet(
   language: string,
   type: ReviewType,
   topic: string,
-  level: string
+  level: string,
+  userId?: string,
 ) {
-  // Cache check — same params → reuse
+  // ── For simulation types: always generate fresh from real ETS questions ──
+  if (type === "simulation_toeic") {
+    const etsQuestions = await getETSSimulationQuestions("TOEIC", QUESTION_COUNT[type]);
+    if (etsQuestions) {
+      // Don't cache — each call returns a freshly shuffled set
+      return {
+        id: `live_toeic_${Date.now()}`,
+        language,
+        type,
+        topic: "TOEIC Simulation",
+        level,
+        title: "Mô phỏng TOEIC – Câu hỏi ETS thực tế",
+        description: `${etsQuestions.length} câu hỏi TOEIC Part 5 từ đề thi ETS thực tế`,
+        duration: DURATION[type],
+        questions: etsQuestions,
+        _count: { questions: etsQuestions.length },
+      };
+    }
+    // Fall through to AI generation if DB doesn't have enough questions yet
+  }
+
+  if (type === "simulation_ielts") {
+    const etsQuestions = await getETSSimulationQuestions("IELTS", QUESTION_COUNT[type]);
+    if (etsQuestions) {
+      return {
+        id: `live_ielts_${Date.now()}`,
+        language,
+        type,
+        topic: "IELTS Simulation",
+        level,
+        title: "Mô phỏng IELTS – Câu hỏi thực tế",
+        description: `${etsQuestions.length} câu hỏi IELTS từ đề thi thực tế`,
+        duration: DURATION[type],
+        questions: etsQuestions,
+        _count: { questions: etsQuestions.length },
+      };
+    }
+  }
+
+  // ── Cache check — same params → reuse ────────────────────────────────────
   const existing = await prisma.reviewSet.findFirst({
     where: { language, type, topic, level },
     include: { questions: { orderBy: { order: "asc" } } },
   });
   if (existing) return existing;
 
-  // Generate via Groq
+  // ── Generate via Groq ─────────────────────────────────────────────────────
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY not configured");
 
   const groq = new Groq({ apiKey });
   const count = QUESTION_COUNT[type];
-  const prompt = buildPrompt(language, type, topic, level, count);
+
+  // For grammar/vocab review: personalize by including user's studied topics in prompt
+  let personalContext = "";
+  if (userId && (type === "grammar" || type === "vocabulary" || type === "quiz_15" || type === "quiz_30")) {
+    try {
+      const studiedTopics = await getUserStudiedTopics(userId, language);
+      if (studiedTopics.length > 0) {
+        personalContext = `\n\nCONTEXT: The learner has recently studied these lessons: ${studiedTopics.join(", ")}. Design questions that reinforce or build on this knowledge where relevant.`;
+      }
+    } catch { /* ignore — personalisation is optional */ }
+  }
+
+  const prompt = buildPrompt(language, type, topic, level, count) + personalContext;
 
   const result = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",

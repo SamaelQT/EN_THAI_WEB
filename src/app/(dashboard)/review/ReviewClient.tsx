@@ -41,13 +41,14 @@ function persistSaved(entries: SavedEntry[]) {
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const TYPES = [
-  { id: "vocabulary",       label: "Ôn tập từ vựng",       icon: "📖", desc: "15 câu · 15 phút",  count: 15 },
-  { id: "grammar",          label: "Ôn tập ngữ pháp",       icon: "✏️",  desc: "15 câu · 15 phút",  count: 15 },
-  { id: "quiz_15",          label: "Kiểm tra 15 phút",      icon: "⏱️",  desc: "20 câu · tổng hợp", count: 20 },
-  { id: "quiz_30",          label: "Kiểm tra 30 phút",      icon: "⏰",  desc: "35 câu · tổng hợp", count: 35 },
-  { id: "simulation_b1",    label: "Mô phỏng B1",           icon: "🎓",  desc: "35 câu · chuẩn B1", count: 35 },
-  { id: "simulation_toeic", label: "Mô phỏng TOEIC",        icon: "🏆",  desc: "35 câu · Part 5+7", count: 35, enOnly: true },
-  { id: "simulation_cutfl", label: "Mô phỏng CU-TFL",       icon: "🇹🇭",  desc: "35 câu · tiếng Thái", count: 35, thOnly: true },
+  { id: "vocabulary",        label: "Ôn tập từ vựng",       icon: "📖", desc: "15 câu · 15 phút",        count: 15 },
+  { id: "grammar",           label: "Ôn tập ngữ pháp",       icon: "✏️",  desc: "15 câu · 15 phút",        count: 15 },
+  { id: "quiz_15",           label: "Kiểm tra 15 phút",      icon: "⏱️",  desc: "20 câu · tổng hợp",       count: 20 },
+  { id: "quiz_30",           label: "Kiểm tra 30 phút",      icon: "⏰",  desc: "35 câu · tổng hợp",       count: 35 },
+  { id: "simulation_b1",    label: "Mô phỏng B1",           icon: "🎓",  desc: "35 câu · chuẩn B1",       count: 35 },
+  { id: "simulation_toeic", label: "Mô phỏng TOEIC",        icon: "🏆",  desc: "35 câu ETS thực tế",      count: 35, enOnly: true },
+  { id: "simulation_ielts", label: "Mô phỏng IELTS",        icon: "🎯",  desc: "35 câu thực tế",          count: 35, enOnly: true },
+  { id: "simulation_cutfl", label: "Mô phỏng CU-TFL",       icon: "🇹🇭",  desc: "35 câu · tiếng Thái",    count: 35, thOnly: true },
 ];
 
 const TOPICS_EN: Record<string, { value: string; label: string }[]> = {
@@ -122,8 +123,12 @@ const IELTS_BANDS = [
 const TYPE_LABELS: Record<string, string> = {
   vocabulary: "Từ vựng", grammar: "Ngữ pháp",
   quiz_15: "Kiểm tra 15p", quiz_30: "Kiểm tra 30p",
-  simulation_b1: "Mô phỏng B1", simulation_toeic: "TOEIC", simulation_cutfl: "CU-TFL",
+  simulation_b1: "Mô phỏng B1", simulation_toeic: "TOEIC",
+  simulation_ielts: "IELTS", simulation_cutfl: "CU-TFL",
 };
+
+// Simulation types that use real ETS questions (fresh each time, bypass cache)
+const ETS_SIMULATION_TYPES = new Set(["simulation_toeic", "simulation_ielts"]);
 
 type LevelTab = "cefr" | "toeic" | "ielts";
 
@@ -147,6 +152,17 @@ export default function ReviewClient({ initialSets, userId }: Props) {
   const [levelTab, setLevelTab] = useState<LevelTab>("cefr");
   const [selectedLevel, setSelectedLevel] = useState<string>("");
   const [selectedTopic, setSelectedTopic] = useState<string>("");
+  // Studied topics (fetched from user lesson history)
+  const [studiedTopics, setStudiedTopics] = useState<string[]>([]);
+
+  // Fetch user's studied lesson topics for personalised suggestions
+  useEffect(() => {
+    if (!lang) return;
+    fetch(`/api/review/studied-topics?language=${lang}`)
+      .then((r) => r.json())
+      .then((d) => { if (Array.isArray(d.topics)) setStudiedTopics(d.topics); })
+      .catch(() => {});
+  }, [lang]);
 
   // Quiz state
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -212,26 +228,36 @@ export default function ReviewClient({ initialSets, userId }: Props) {
     toast("Đã bỏ lưu");
   }
 
-  // Get or generate a set without starting the quiz
-  async function getOrGenSet(): Promise<ReviewSet | null> {
-    if (!canStart) return null;
-    const topic = isSimulation ? selectedType : selectedTopic;
-    const cached = sets.find(
-      (s) => s.language === lang && s.type === selectedType && s.topic === topic && s.level === selectedLevel
-    );
-    if (cached) return cached;
-
-    setSaving(true);
+  async function callReviewAPI(topic: string): Promise<ReviewSet | null> {
     const res = await fetch("/api/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ language: lang, type: selectedType, topic, level: selectedLevel }),
     });
     const data = await res.json();
-    setSaving(false);
     if (!res.ok) { toast.error(data.error); return null; }
-    setSets((prev) => prev.some((s) => s.id === data.set.id) ? prev : [data.set, ...prev]);
-    return data.set;
+    return data.set as ReviewSet;
+  }
+
+  // Get or generate a set without starting the quiz
+  async function getOrGenSet(): Promise<ReviewSet | null> {
+    if (!canStart) return null;
+    const topic = isSimulation ? selectedType : selectedTopic;
+    // ETS simulation sets are always freshly shuffled — skip cache
+    if (!ETS_SIMULATION_TYPES.has(selectedType)) {
+      const cached = sets.find(
+        (s) => s.language === lang && s.type === selectedType && s.topic === topic && s.level === selectedLevel
+      );
+      if (cached) return cached;
+    }
+    setSaving(true);
+    const set = await callReviewAPI(topic);
+    setSaving(false);
+    if (!set) return null;
+    if (!ETS_SIMULATION_TYPES.has(selectedType)) {
+      setSets((prev) => prev.some((s) => s.id === set.id) ? prev : [set, ...prev]);
+    }
+    return set;
   }
 
   async function handleSave() {
@@ -242,22 +268,29 @@ export default function ReviewClient({ initialSets, userId }: Props) {
   async function handleStart() {
     if (!canStart) return;
     const topic = isSimulation ? selectedType : selectedTopic;
+
+    // ETS simulation: always fresh questions from DB (no cache)
+    if (ETS_SIMULATION_TYPES.has(selectedType)) {
+      setGenerating(true);
+      const set = await callReviewAPI(topic);
+      setGenerating(false);
+      if (!set) return;
+      await startQuiz(set);
+      return;
+    }
+
+    // Other types: check cache first
     const cached = sets.find(
       (s) => s.language === lang && s.type === selectedType && s.topic === topic && s.level === selectedLevel
     );
     if (cached) { await startQuiz(cached); return; }
 
     setGenerating(true);
-    const res = await fetch("/api/review", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ language: lang, type: selectedType, topic, level: selectedLevel }),
-    });
-    const data = await res.json();
+    const set = await callReviewAPI(topic);
     setGenerating(false);
-    if (!res.ok) { toast.error(data.error); return; }
-    setSets((prev) => prev.some((s) => s.id === data.set.id) ? prev : [data.set, ...prev]);
-    await startQuiz(data.set);
+    if (!set) return;
+    setSets((prev) => prev.some((s) => s.id === set.id) ? prev : [set, ...prev]);
+    await startQuiz(set);
   }
 
   async function startQuiz(set: ReviewSet) {
@@ -643,22 +676,56 @@ export default function ReviewClient({ initialSets, userId }: Props) {
           )}
 
           {/* Step 4 — Chủ đề */}
-          {selectedLevel && needsTopic && topicList.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-sm font-medium text-muted-foreground">Chọn chủ đề</p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {topicList.map(({ value, label }) => (
-                  <button
-                    key={value}
-                    onClick={() => setSelectedTopic(value)}
-                    className={`text-left rounded-xl border-2 px-4 py-3 text-sm transition-colors ${
-                      selectedTopic === value ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary/50 hover:bg-muted"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+          {selectedLevel && needsTopic && (
+            <div className="space-y-4">
+              {/* Studied topics from lesson history */}
+              {studiedTopics.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-muted-foreground">
+                    📚 Ôn lại bài đã học
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {studiedTopics.map((title) => (
+                      <button
+                        key={title}
+                        onClick={() => setSelectedTopic(title)}
+                        className={`rounded-full border-2 px-3 py-1 text-xs font-medium transition-colors ${
+                          selectedTopic === title
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-primary/40 text-primary hover:bg-primary/10"
+                        }`}
+                      >
+                        {title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Static topic list */}
+              {topicList.length > 0 && (
+                <div className="space-y-2">
+                  {studiedTopics.length > 0 && (
+                    <p className="text-xs text-muted-foreground">Hoặc chọn chủ đề khác</p>
+                  )}
+                  {studiedTopics.length === 0 && (
+                    <p className="text-sm font-medium text-muted-foreground">Chọn chủ đề</p>
+                  )}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {topicList.map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => setSelectedTopic(value)}
+                        className={`text-left rounded-xl border-2 px-4 py-3 text-sm transition-colors ${
+                          selectedTopic === value ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary/50 hover:bg-muted"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
