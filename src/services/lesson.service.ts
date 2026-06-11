@@ -549,14 +549,15 @@ async function fetchExamExamples(examType: string | undefined, lessonType: strin
   }
 }
 
-/** Generate lesson content via AI, then replace quiz with real ETS questions if available. */
+/**
+ * Generate lesson content via AI.
+ * The AI quiz (lesson.quiz) is kept as-is — it's crafted by the AI specifically for this lesson's topic.
+ * ETS questions from the DB are NOT used here because keyword matching is too imprecise:
+ * e.g. topic "Past Simple" → keyword "past" → accidentally pulls past_perfect, past_continuous questions.
+ * ETS questions are used in /review simulations where topic matching is less critical.
+ */
 async function generateLessonContent(req: GenerateRequest): Promise<Record<string, unknown>> {
   const lesson = await callAI(buildPrompt(req));
-  const etsQuiz = await getETSQuiz(req.examType, req.lessonType, req.topic, req.level);
-  if (etsQuiz) {
-    lesson.quiz = etsQuiz;
-    lesson._quizSource = "ETS"; // flag for debugging
-  }
   return lesson;
 }
 
@@ -612,11 +613,9 @@ export async function generateLesson(lessonType: string, language: string, level
       const existing = await prisma.lesson.findUnique({ where: { id: topicId } });
       if (existing && existing.content !== "{}") {
         try {
-          const cached = JSON.parse(existing.content);
-          // Replace quiz with ETS questions if available (even for cached lessons)
-          const etsQuiz = await getETSQuiz(examType, lessonType, topic, level);
-          if (etsQuiz) cached.quiz = etsQuiz;
-          return cached;
+          // Return cached lesson with its original AI quiz — do not replace with ETS questions
+          // (ETS keyword matching is too broad and pulls off-topic questions)
+          return JSON.parse(existing.content);
         } catch { /* fall through to generate */ }
       }
     }
@@ -643,12 +642,7 @@ export async function generateLesson(lessonType: string, language: string, level
   const lessonId = `${lessonType}_${language}_${level}`;
   const exact = await prisma.lesson.findUnique({ where: { id: lessonId } });
   if (exact && exact.content !== "{}") {
-    try {
-      const cached = JSON.parse(exact.content);
-      const etsQuiz = await getETSQuiz(examType, lessonType, undefined, level);
-      if (etsQuiz) cached.quiz = etsQuiz;
-      return cached;
-    } catch { /* fall through */ }
+    try { return JSON.parse(exact.content); } catch { /* fall through */ }
   }
 
   const LEVEL_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"];
