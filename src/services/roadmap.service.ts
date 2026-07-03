@@ -118,7 +118,7 @@ export async function createRoadmap(
     throw new RoadmapServiceError(feasibility.message ?? "Không khả thi", 422, { minWeeks: feasibility.minWeeks });
 
   const weekPlans = generateWeeklyPlan(
-    language as "english" | "thai",
+    language as "english" | "thai" | "korean",
     currentLevel,
     targetLevel,
     availableWeeks,

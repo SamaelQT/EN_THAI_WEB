@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, PlayCircle, BookOpen, Volume2, Mic, Square } from "lucide-react";
 import CalendarView, { type LessonDay } from "./CalendarView";
-import { CEFR_WEEK_THEMES, TOEIC_WEEK_THEMES, IELTS_WEEK_THEMES, THAI_WEEK_THEMES, type Level } from "@/lib/roadmap-generator";
+import { CEFR_WEEK_THEMES, TOEIC_WEEK_THEMES, IELTS_WEEK_THEMES, THAI_WEEK_THEMES, KOREAN_WEEK_THEMES, type Level } from "@/lib/roadmap-generator";
 
 // Built-in lesson content for the MVP (expandable via AI later)
 const LESSON_CONTENT: Record<string, any> = {
@@ -137,12 +137,14 @@ type Roadmap = { id: string; language: string; currentLevel: string; targetLevel
 type Props = {
   enRoadmap: Roadmap | null;
   thRoadmap: Roadmap | null;
+  krRoadmap: Roadmap | null;
   lessonDays: LessonDay[];
   defaultLang: string;
   userId: string;
   hasPlacementTest: boolean;
   enStreak?: number;
   thStreak?: number;
+  krStreak?: number;
 };
 
 type LessonViewState = "list" | "browse" | "generating" | "learning" | "quiz" | "done" | "conversation" | "conversation-done";
@@ -160,7 +162,7 @@ const SCENARIOS: { id: string; label: string; icon: string; desc: string }[] = [
   { id: "directions", label: "Hỏi đường", icon: "🗺️", desc: "Tìm đường, địa điểm" },
 ];
 
-export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaultLang, userId, hasPlacementTest, enStreak = 0, thStreak = 0 }: Props) {
+export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonDays, defaultLang, userId, hasPlacementTest, enStreak = 0, thStreak = 0, krStreak = 0 }: Props) {
   const router = useRouter();
   const [lang, setLang] = useState<string>(defaultLang);
   const [lessonState, setLessonState] = useState<LessonViewState>("list");
@@ -220,7 +222,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
         if (data.reply) {
           setConvMessages([{ role: "assistant", content: data.reply }]);
           if (typeof window !== "undefined" && window.speechSynthesis) {
-            const ttsLangVal = lang === "thai" ? "th-TH" : "en-US";
+            const ttsLangVal = lang === "thai" ? "th-TH" : lang === "korean" ? "ko-KR" : "en-US";
             const cut = data.reply.search(/💡|Góp ý|Nhận xét|Lưu ý:/);
             const speakPart = (cut > 0 ? data.reply.slice(0, cut) : data.reply).trim();
             const utt = new SpeechSynthesisUtterance(speakPart);
@@ -257,7 +259,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
   // ── Speech helpers ────────────────────────────────────────────
 
   function getTTSLang() {
-    return activeLessonLang === "thai" ? "th-TH" : "en-US";
+    return activeLessonLang === "thai" ? "th-TH" : activeLessonLang === "korean" ? "ko-KR" : "en-US";
   }
 
   /** True if text is primarily Vietnamese (contains Vietnamese-specific diacritics) */
@@ -756,6 +758,8 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
           let themes: string[];
           if (lang === "thai") {
             themes = THAI_WEEK_THEMES[selectedCefr as Level] ?? [];
+          } else if (lang === "korean") {
+            themes = KOREAN_WEEK_THEMES[selectedCefr as Level] ?? [];
           } else if (browseTab === "toeic") {
             themes = TOEIC_WEEK_THEMES[selectedCefr as Level] ?? [];
           } else if (browseTab === "ielts") {
@@ -1610,9 +1614,10 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
   // ── List screen ───────────────────────────────────────────────
   const hasEn = !!enRoadmap;
   const hasTh = !!thRoadmap;
-  const hasAnyRoadmap = hasEn || hasTh;
-  const currentLevel = (lang === "english" ? enRoadmap : thRoadmap)?.currentLevel ?? "";
-  const activeRoadmap = lang === "english" ? enRoadmap : thRoadmap;
+  const hasKr = !!krRoadmap;
+  const hasAnyRoadmap = hasEn || hasTh || hasKr;
+  const currentLevel = (lang === "english" ? enRoadmap : lang === "korean" ? krRoadmap : thRoadmap)?.currentLevel ?? "";
+  const activeRoadmap = lang === "english" ? enRoadmap : lang === "korean" ? krRoadmap : thRoadmap;
   const roadmapSubtitle = (() => {
     if (!activeRoadmap || !currentLevel) return "";
     const exam = activeRoadmap.targetExam;
@@ -1661,6 +1666,14 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
               Tiếng Thái
             </Button>
           )}
+          {hasKr && (
+            <Button size="sm" variant={lang === "korean" ? "default" : "outline"}
+              onClick={() => { setLang("korean"); setLessonState("list"); }}
+              className="gap-1.5">
+              <span className="text-[10px] font-bold text-white px-1 py-0.5 rounded bg-violet-500">KR</span>
+              Tiếng Hàn
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1671,7 +1684,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
           onStartLesson={(type, language, level, dayId, examType, weekTheme, weekNumber, totalWeeks) => {
             // Calculate progressive level: interpolate between currentLevel and targetLevel by week
             const LEVEL_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"];
-            const roadmap = language === "english" ? enRoadmap : thRoadmap;
+            const roadmap = language === "english" ? enRoadmap : language === "korean" ? krRoadmap : thRoadmap;
             let progressiveLevel = level;
             if (roadmap?.targetLevel && weekNumber && totalWeeks) {
               const fromIdx = LEVEL_ORDER.indexOf(level);
@@ -1715,7 +1728,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, lessonDays, defaul
               key={lt.type}
               className="cursor-pointer transition-shadow hover:shadow-md"
               onClick={() => {
-                const activeRoadmap = lang === "english" ? enRoadmap : thRoadmap;
+                const activeRoadmap = lang === "english" ? enRoadmap : lang === "korean" ? krRoadmap : thRoadmap;
                 const exam = activeRoadmap?.targetExam ?? "general";
                 const defaultTab: "cefr" | "toeic" | "ielts" =
                   exam === "TOEIC" ? "toeic" : exam === "IELTS" ? "ielts" : "cefr";

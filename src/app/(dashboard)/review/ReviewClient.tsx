@@ -49,6 +49,7 @@ const TYPES = [
   { id: "simulation_toeic", label: "Mô phỏng TOEIC",        icon: "🏆",  desc: "35 câu ETS thực tế",      count: 35, enOnly: true },
   { id: "simulation_ielts", label: "Mô phỏng IELTS",        icon: "🎯",  desc: "35 câu thực tế",          count: 35, enOnly: true },
   { id: "simulation_cutfl", label: "Mô phỏng CU-TFL",       icon: "🇹🇭",  desc: "35 câu · tiếng Thái",    count: 35, thOnly: true },
+  { id: "simulation_topik", label: "Mô phỏng TOPIK",        icon: "🇰🇷",  desc: "35 câu thực tế",          count: 35, koOnly: true },
 ];
 
 const TOPICS_EN: Record<string, { value: string; label: string }[]> = {
@@ -72,6 +73,27 @@ const TOPICS_EN: Record<string, { value: string; label: string }[]> = {
     { value: "reported_speech",    label: "Câu gián tiếp" },
     { value: "modal_verbs",        label: "Động từ khuyết thiếu" },
     { value: "relative_clauses",   label: "Mệnh đề quan hệ" },
+  ],
+};
+
+const TOPICS_KO: Record<string, { value: string; label: string }[]> = {
+  vocabulary: [
+    { value: "greetings",     label: "Chào hỏi 🙏" },
+    { value: "food_culture",  label: "Ẩm thực Hàn 🍜" },
+    { value: "kpop_culture",  label: "K-pop & Văn hóa 🎵" },
+    { value: "travel",        label: "Du lịch ✈️" },
+    { value: "daily_life",    label: "Cuộc sống hàng ngày 🏠" },
+    { value: "business",      label: "Kinh doanh 💼" },
+    { value: "random_vocab",  label: "Ngẫu nhiên 🎲" },
+  ],
+  grammar: [
+    { value: "particles",         label: "Trợ từ (은/는/이/가/을/를)" },
+    { value: "verb_endings",      label: "Đuôi động từ cơ bản" },
+    { value: "past_tense",        label: "Thì quá khứ (-았/었)" },
+    { value: "honorifics",        label: "Kính ngữ (존댓말)" },
+    { value: "connectors",        label: "Liên từ (-고, -아서/어서)" },
+    { value: "can_cannot",        label: "Có thể / Không thể (수 있다/없다)" },
+    { value: "desire_intention",  label: "Muốn / Dự định (-고 싶다/-려고)" },
   ],
 };
 
@@ -125,6 +147,7 @@ const TYPE_LABELS: Record<string, string> = {
   quiz_15: "Kiểm tra 15p", quiz_30: "Kiểm tra 30p",
   simulation_b1: "Mô phỏng B1", simulation_toeic: "TOEIC",
   simulation_ielts: "IELTS", simulation_cutfl: "CU-TFL",
+  simulation_topik: "TOPIK",
 };
 
 // Simulation types that use real ETS questions (fresh each time, bypass cache)
@@ -147,7 +170,7 @@ export default function ReviewClient({ initialSets, userId }: Props) {
   useEffect(() => { setSavedEntries(loadSaved()); }, []);
 
   // Filter state
-  const [lang, setLang] = useState<"english" | "thai" | "">("");
+  const [lang, setLang] = useState<"english" | "thai" | "korean" | "">("");
   const [selectedType, setSelectedType] = useState<string>("");
   const [levelTab, setLevelTab] = useState<LevelTab>("cefr");
   const [selectedLevel, setSelectedLevel] = useState<string>("");
@@ -195,6 +218,8 @@ export default function ReviewClient({ initialSets, userId }: Props) {
   const isSimulation = selectedType.startsWith("simulation_") || selectedType === "quiz_15" || selectedType === "quiz_30";
   const topicList = lang === "english"
     ? TOPICS_EN[selectedType] ?? []
+    : lang === "korean"
+    ? TOPICS_KO[selectedType] ?? []
     : TOPICS_TH[selectedType] ?? [];
 
   const canStart = !!lang && !!selectedType && !!selectedLevel &&
@@ -544,8 +569,9 @@ export default function ReviewClient({ initialSets, userId }: Props) {
             <p className="text-sm font-medium text-muted-foreground">Chọn ngôn ngữ</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {[
-                { id: "english" as const, label: "Tiếng Anh", desc: "English · TOEIC · IELTS · CEFR", badge: "EN", color: "bg-blue-500" },
-                { id: "thai"    as const, label: "Tiếng Thái", desc: "ภาษาไทย · CU-TFL · CEFR",        badge: "TH", color: "bg-red-500"  },
+                { id: "english" as const, label: "Tiếng Anh",  desc: "English · TOEIC · IELTS · CEFR", badge: "EN", color: "bg-blue-500"   },
+                { id: "thai"    as const, label: "Tiếng Thái",  desc: "ภาษาไทย · CU-TFL · CEFR",        badge: "TH", color: "bg-red-500"    },
+                { id: "korean"  as const, label: "Tiếng Hàn",   desc: "한국어 · TOPIK · CEFR",            badge: "KR", color: "bg-violet-500" },
               ].map(({ id, label, desc, badge, color }) => (
                 <button
                   key={id}
@@ -576,7 +602,7 @@ export default function ReviewClient({ initialSets, userId }: Props) {
                 <p className="text-sm font-medium text-muted-foreground">Chọn loại bài</p>
                 <div className="grid gap-2">
                   {TYPES
-                    .filter((t) => !(t.enOnly && lang === "thai") && !(t.thOnly && lang === "english"))
+                    .filter((t) => (!t.enOnly || lang === "english") && (!t.thOnly || lang === "thai") && (!(t as any).koOnly || lang === "korean"))
                     .map((t) => (
                       <button
                         key={t.id}
@@ -616,7 +642,7 @@ export default function ReviewClient({ initialSets, userId }: Props) {
                     </div>
                   )}
 
-                  {(levelTab === "cefr" || lang === "thai") && (
+                  {(levelTab === "cefr" || lang === "thai" || lang === "korean") && (
                     <div className="grid grid-cols-2 gap-2">
                       {CEFR_LEVELS.map(({ lvl, desc }) => (
                         <button

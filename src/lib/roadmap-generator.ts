@@ -364,6 +364,47 @@ export const THAI_WEEK_THEMES: Record<Level, string[]> = {
   ],
 };
 
+// ─── Korean Week Themes ───────────────────────────────────────────────────────
+
+export const KOREAN_WEEK_THEMES: Record<Level, string[]> = {
+  A1: [
+    "Hangul & Basic Pronunciation (자음과 모음)", "Greetings & Introductions (인사와 소개)",
+    "Numbers & Counting (숫자와 세기)", "Colors & Shapes (색깔과 모양)",
+    "Family & People (가족과 사람들)", "Daily Routines (일상 생활)",
+    "Food & Drinks (음식과 음료)", "Review & Practice Week 1",
+  ],
+  A2: [
+    "Shopping & Prices (쇼핑과 가격)", "Transportation (교통수단)",
+    "Weather & Seasons (날씨와 계절)", "Home & Furniture (집과 가구)",
+    "Hobbies & Free Time (취미와 여가)", "Health & Body (건강과 신체)",
+    "Directions & Places (방향과 장소)", "Review & Practice Week 2",
+  ],
+  B1: [
+    "Work & Jobs (직업과 일)", "Restaurants & Food Culture (식당 문화)",
+    "Travel & Tourism (여행)", "News & Current Events (뉴스)",
+    "Korean Culture & Traditions (한국 문화)", "Technology & Social Media (기술과 SNS)",
+    "Opinions & Discussions (의견 나누기)", "Review & Practice Week 3",
+  ],
+  B2: [
+    "Business Korean (비즈니스 한국어)", "Academic Writing (학술 글쓰기)",
+    "Korean Society & Issues (한국 사회)", "Environment (환경)",
+    "Arts & Entertainment (예술과 엔터테인먼트)", "Advanced Grammar Patterns (고급 문법)",
+    "Formal vs Informal Korean (경어와 반말)", "Review & Practice Week 4",
+  ],
+  C1: [
+    "Korean Literature (한국 문학)", "Philosophy & Abstract Concepts (철학 개념)",
+    "Media & Journalism (미디어)", "Law & Politics (법과 정치)",
+    "Economics (경제)", "Scientific Discourse (과학 담화)",
+    "Nuanced Expression (미묘한 표현)", "Review & Practice Week 5",
+  ],
+  C2: [
+    "Native-level Idioms (관용어)", "Regional Dialects (사투리)",
+    "Historical Korean (역사적 한국어)", "Literary Analysis (문학 분석)",
+    "Debate & Rhetoric (토론과 수사)", "Korean Proverbs (속담)",
+    "Creative Expression (창의적 표현)", "Final Review Week 6",
+  ],
+};
+
 // ─── Skill pools per exam ─────────────────────────────────────────────────────
 
 /**
@@ -406,7 +447,7 @@ export type WeekPlan = {
 };
 
 export function generateWeeklyPlan(
-  language: "english" | "thai",
+  language: "english" | "thai" | "korean",
   fromLevel: Level,
   toLevel: Level,
   totalWeeks: number,
@@ -420,6 +461,8 @@ export function generateWeeklyPlan(
   let themes: Record<Level, string[]>;
   if (language === "thai") {
     themes = THAI_WEEK_THEMES;
+  } else if (language === "korean") {
+    themes = targetExam === "TOPIK" ? KOREAN_WEEK_THEMES : KOREAN_WEEK_THEMES;
   } else if (targetExam === "TOEIC") {
     themes = TOEIC_WEEK_THEMES;
   } else if (targetExam === "IELTS") {

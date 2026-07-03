@@ -34,6 +34,7 @@ type Roadmap = {
 const LANG_META = {
   english: { label: "Tiếng Anh", flag: "EN", color: "bg-blue-500" },
   thai: { label: "Tiếng Thái", flag: "TH", color: "bg-red-500" },
+  korean: { label: "Tiếng Hàn", flag: "KR", color: "bg-violet-500" },
 };
 
 const LESSON_TYPE_LABELS: Record<string, string> = {
@@ -54,6 +55,8 @@ const EXAM_TEST_TYPE: Record<string, string> = {
   general: "cefr",
   general_thai: "cefr",
   "CU-TFL": "cutfl",
+  TOPIK: "topik",
+  general_korean: "cefr",
 };
 
 const EXAM_LABEL: Record<string, string> = {
@@ -62,6 +65,8 @@ const EXAM_LABEL: Record<string, string> = {
   general: "Tiếng Anh tổng quát (CEFR)",
   "CU-TFL": "CU-TFL (tiếng Thái)",
   general_thai: "Tiếng Thái tổng quát (CEFR)",
+  TOPIK: "TOPIK (tiếng Hàn)",
+  general_korean: "Tiếng Hàn tổng quát (CEFR)",
 };
 
 const FOCUS_OPTIONS = [
@@ -96,6 +101,7 @@ const TEST_TYPE_LABEL: Record<string, string> = {
   toeic: "TOEIC",
   ielts: "IELTS",
   cutfl: "CU-TFL",
+  topik: "TOPIK",
 };
 
 // Ordered CEFR levels (index = rank)
@@ -105,7 +111,7 @@ const CUTFL_LEVELS = ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5"];
 
 /** Return target levels available above the current level */
 function getTargetLevels(exam: string, currentLevel: string): string[] {
-  if (exam === "general" || exam === "general_thai") {
+  if (exam === "general" || exam === "general_thai" || exam === "general_korean" || exam === "TOPIK") {
     const idx = CEFR_LEVELS.indexOf(currentLevel);
     return idx >= 0 ? CEFR_LEVELS.slice(idx + 1) : CEFR_LEVELS.slice(1);
   }
@@ -142,6 +148,8 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
     ? ["TOEIC", "IELTS", "general"]
     : form.language === "thai"
     ? ["CU-TFL", "general_thai"]
+    : form.language === "korean"
+    ? ["TOPIK", "general_korean"]
     : [];
 
   // Tests that match the required testType for the selected exam
@@ -152,7 +160,7 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
   const hasMatchingTest = matchingTests.length > 0;
 
   // Level-based exams (CEFR / CU-TFL) — user picks a target level instead of a score
-  const isLevelBased = form.targetExam === "general" || form.targetExam === "general_thai" || form.targetExam === "CU-TFL";
+  const isLevelBased = form.targetExam === "general" || form.targetExam === "general_thai" || form.targetExam === "CU-TFL" || form.targetExam === "TOPIK" || form.targetExam === "general_korean";
   const selectedTest = matchingTests.find((t) => t.id === form.placementTestId);
   const currentLevel = selectedTest?.level ?? "";
   const availableTargetLevels = isLevelBased && currentLevel
@@ -292,13 +300,13 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
                     <Select
                       value={form.language}
                       onValueChange={(v) => onLanguageChange(v ?? "")}
-                      items={{ english: "Tiếng Anh", thai: "Tiếng Thái" }}
+                      items={{ english: "Tiếng Anh", thai: "Tiếng Thái", korean: "Tiếng Hàn" }}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Chọn ngôn ngữ" />
                       </SelectTrigger>
                       <SelectContent>
-                        {["english", "thai"]
+                        {["english", "thai", "korean"]
                           .filter((lang) => tests.some((t) => t.language === lang))
                           .map((lang) => {
                             const m = LANG_META[lang as keyof typeof LANG_META];

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { createNotification } from "./notification.service";
 import Groq from "groq-sdk";
 
-const SYSTEM_PROMPT = `You are an expert language teacher creating structured lessons for Vietnamese learners studying English or Thai.
+const SYSTEM_PROMPT = `You are an expert language teacher creating structured lessons for Vietnamese learners studying English, Thai, or Korean.
 Output ONLY valid JSON — no markdown wrapper, no extra text before or after.
 
 LANGUAGE RULES:
@@ -54,7 +54,7 @@ export function topicToSlug(topic: string): string {
 }
 
 function buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId, examExamples }: GenerateRequest): string {
-  const langLabel = language === "english" ? "tiếng Anh" : "tiếng Thái";
+  const langLabel = language === "english" ? "tiếng Anh" : language === "korean" ? "tiếng Hàn" : "tiếng Thái";
 
   // ── Detailed exam format specs ────────────────────────────────────────────
   const examContext: Record<string, string> = {

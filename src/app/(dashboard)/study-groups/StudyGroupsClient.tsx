@@ -70,7 +70,7 @@ type SSEEvent =
   | { type: "quiz-next"; sessionId: string; prevCorrectAnswer: number; prevResults: Array<{ userId: string; correct: boolean }>; questionIndex: number; question: string; options: string[] }
   | { type: "quiz-finish"; sessionId: string; prevCorrectAnswer: number; prevResults: Array<{ userId: string; correct: boolean }>; leaderboard: Array<{ userId: string; name: string | null; image: string | null; score: number }> };
 
-const LANG: Record<string, string> = { english: "EN", thai: "TH" };
+const LANG: Record<string, string> = { english: "EN", thai: "TH", korean: "KR" };
 const STUN = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
 // ─── Props ────────────────────────────────────────────────────────────────────

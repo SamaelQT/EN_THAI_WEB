@@ -39,6 +39,7 @@ type Props = {
 const LANG_META: Record<string, { flag: string; color: string; label: string }> = {
   english: { flag: "EN", color: "bg-blue-500", label: "Tiếng Anh" },
   thai: { flag: "TH", color: "bg-red-500", label: "Tiếng Thái" },
+  korean: { flag: "KR", color: "bg-violet-500", label: "Tiếng Hàn" },
 };
 
 export default function FriendsClient({ friends, requests, currentUserId, leaderboard }: Props) {

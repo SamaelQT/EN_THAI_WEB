@@ -24,6 +24,7 @@ type LinkedRoadmap = { id: string; language: string; targetExam: string | null }
 type Props = {
   englishTest: PlacementTest | null;
   thaiTest: PlacementTest | null;
+  koreanTest: PlacementTest | null;
   allTests: PlacementTest[];
 };
 
@@ -32,6 +33,7 @@ type TestState = "select" | "running" | "done";
 const LANG_META: Record<Language, { label: string; flag: string; color: string }> = {
   english: { label: "Tiếng Anh", flag: "EN", color: "bg-blue-500" },
   thai: { label: "Tiếng Thái", flag: "TH", color: "bg-red-500" },
+  korean: { label: "Tiếng Hàn", flag: "KR", color: "bg-violet-500" },
 };
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -65,7 +67,7 @@ const TEST_TYPE_LABEL: Record<string, string> = {
   cefr: "CEFR", toeic: "TOEIC", ielts: "IELTS", cutfl: "CU-TFL",
 };
 
-export default function PlacementTestClient({ englishTest, thaiTest, allTests }: Props) {
+export default function PlacementTestClient({ englishTest, thaiTest, koreanTest, allTests }: Props) {
   const router = useRouter();
   const [state, setState] = useState<TestState>("select");
 
@@ -231,9 +233,9 @@ export default function PlacementTestClient({ englishTest, thaiTest, allTests }:
         <div>
           <p className="text-sm font-medium text-muted-foreground mb-3">Bước 1 · Chọn ngôn ngữ</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {(["english", "thai"] as Language[]).map((lang) => {
+            {(["english", "thai", "korean"] as Language[]).map((lang) => {
               const meta = LANG_META[lang];
-              const done = lang === "english" ? englishTest : thaiTest;
+              const done = lang === "english" ? englishTest : lang === "korean" ? koreanTest : thaiTest;
               const isSelected = selectedLang === lang;
               return (
                 <button
@@ -304,12 +306,12 @@ export default function PlacementTestClient({ englishTest, thaiTest, allTests }:
           </div>
         )}
 
-        {(englishTest || thaiTest) && (
+        {(englishTest || thaiTest || koreanTest) && (
           <Card className="bg-muted/50">
             <CardContent className="pt-6 flex items-center gap-3">
               <Award className="text-yellow-500" size={24} />
               <div>
-                <p className="font-medium text-sm">Tip: Làm cả 2 ngôn ngữ</p>
+                <p className="font-medium text-sm">Tip: Làm nhiều ngôn ngữ</p>
                 <p className="text-xs text-muted-foreground">
                   Mỗi ngôn ngữ có lộ trình riêng. Bạn có thể học song song hoặc tập trung từng ngôn ngữ.
                 </p>

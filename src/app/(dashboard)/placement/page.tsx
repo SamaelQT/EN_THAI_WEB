@@ -11,11 +11,13 @@ export default async function PlacementPage() {
 
   const englishTest = tests.find((t) => t.language === "english") ?? null;
   const thaiTest    = tests.find((t) => t.language === "thai")    ?? null;
+  const koreanTest  = tests.find((t) => t.language === "korean")  ?? null;
 
   return (
     <PlacementTestClient
       englishTest={englishTest}
       thaiTest={thaiTest}
+      koreanTest={koreanTest}
       allTests={tests}
     />
   );

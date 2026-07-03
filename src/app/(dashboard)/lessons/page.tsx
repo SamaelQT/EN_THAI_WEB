@@ -13,7 +13,7 @@ export default async function LessonsPage({
   const params = await searchParams;
   const lang = params.lang ?? "english";
 
-  const [enRoadmap, thRoadmap, testCount, enStreak, thStreak] = await Promise.all([
+  const [enRoadmap, thRoadmap, krRoadmap, testCount, enStreak, thStreak, krStreak] = await Promise.all([
     prisma.roadmap.findFirst({
       where: { userId: uid, language: "english", status: "active" },
       include: {
@@ -34,14 +34,25 @@ export default async function LessonsPage({
         placementTest: { select: { level: true, testType: true } },
       },
     }),
+    prisma.roadmap.findFirst({
+      where: { userId: uid, language: "korean", status: "active" },
+      include: {
+        weeks: {
+          orderBy: { weekNumber: "asc" },
+          include: { days: { orderBy: { dayNumber: "asc" } } },
+        },
+        placementTest: { select: { level: true, testType: true } },
+      },
+    }),
     prisma.placementTest.count({ where: { userId: uid } }),
     prisma.streak.findUnique({ where: { userId_language: { userId: uid, language: "english" } }, select: { currentStreak: true, longestStreak: true } }),
     prisma.streak.findUnique({ where: { userId_language: { userId: uid, language: "thai" } }, select: { currentStreak: true, longestStreak: true } }),
+    prisma.streak.findUnique({ where: { userId_language: { userId: uid, language: "korean" } }, select: { currentStreak: true, longestStreak: true } }),
   ]);
 
   // Flatten all roadmap days into LessonDay[] for CalendarView
   const lessonDays: LessonDay[] = [];
-  for (const roadmap of [enRoadmap, thRoadmap]) {
+  for (const roadmap of [enRoadmap, thRoadmap, krRoadmap]) {
     if (!roadmap) continue;
     for (const week of roadmap.weeks) {
       for (const day of week.days) {
@@ -72,17 +83,22 @@ export default async function LessonsPage({
   const thRoadmapMeta = thRoadmap
     ? { id: thRoadmap.id, language: thRoadmap.language, currentLevel: thRoadmap.currentLevel, targetLevel: thRoadmap.targetLevel, totalWeeks: thRoadmap.totalWeeks, targetExam: thRoadmap.targetExam ?? "general", targetScore: thRoadmap.targetScore ?? null, placementTestLevel: thRoadmap.placementTest?.level ?? null, placementTestType: thRoadmap.placementTest?.testType ?? null }
     : null;
+  const krRoadmapMeta = krRoadmap
+    ? { id: krRoadmap.id, language: krRoadmap.language, currentLevel: krRoadmap.currentLevel, targetLevel: krRoadmap.targetLevel, totalWeeks: krRoadmap.totalWeeks, targetExam: krRoadmap.targetExam ?? "general", targetScore: krRoadmap.targetScore ?? null, placementTestLevel: krRoadmap.placementTest?.level ?? null, placementTestType: krRoadmap.placementTest?.testType ?? null }
+    : null;
 
   return (
     <LessonsClient
       enRoadmap={enRoadmapMeta}
       thRoadmap={thRoadmapMeta}
+      krRoadmap={krRoadmapMeta}
       lessonDays={lessonDays}
       defaultLang={lang}
       userId={uid}
       hasPlacementTest={testCount > 0}
       enStreak={enStreak?.currentStreak ?? 0}
       thStreak={thStreak?.currentStreak ?? 0}
+      krStreak={krStreak?.currentStreak ?? 0}
     />
   );
 }

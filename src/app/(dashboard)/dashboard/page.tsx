@@ -51,8 +51,10 @@ export default async function DashboardPage() {
 
   const enRoadmap = roadmaps.find((r: (typeof roadmaps)[0]) => r.language === "english");
   const thRoadmap = roadmaps.find((r: (typeof roadmaps)[0]) => r.language === "thai");
+  const krRoadmap = roadmaps.find((r: (typeof roadmaps)[0]) => r.language === "korean");
   const enStreak = streaks.find((s: (typeof streaks)[0]) => s.language === "english");
   const thStreak = streaks.find((s: (typeof streaks)[0]) => s.language === "thai");
+  const krStreak = streaks.find((s: (typeof streaks)[0]) => s.language === "korean");
 
   return (
     <div className="space-y-6">
@@ -71,7 +73,7 @@ export default async function DashboardPage() {
         <StatCard
           icon={<Flame className="text-orange-500" />}
           label="Streak tốt nhất"
-          value={`${Math.max(enStreak?.longestStreak ?? 0, thStreak?.longestStreak ?? 0)} ngày`}
+          value={`${Math.max(enStreak?.longestStreak ?? 0, thStreak?.longestStreak ?? 0, krStreak?.longestStreak ?? 0)} ngày`}
         />
         <StatCard
           icon={<BookOpen className="text-blue-500" />}
@@ -107,6 +109,14 @@ export default async function DashboardPage() {
           roadmap={thRoadmap}
           streak={thStreak}
           lang="thai"
+        />
+        <RoadmapWidget
+          flag="KR"
+          flagColor="bg-violet-500"
+          label="Tiếng Hàn"
+          roadmap={krRoadmap}
+          streak={krStreak}
+          lang="korean"
         />
       </div>
 

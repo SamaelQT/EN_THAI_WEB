@@ -9,7 +9,8 @@ export type ReviewType =
   | "simulation_b1"
   | "simulation_toeic"
   | "simulation_ielts"
-  | "simulation_cutfl";
+  | "simulation_cutfl"
+  | "simulation_topik";
 
 const QUESTION_COUNT: Record<ReviewType, number> = {
   vocabulary: 15,
@@ -20,6 +21,7 @@ const QUESTION_COUNT: Record<ReviewType, number> = {
   simulation_toeic: 35,
   simulation_ielts: 35,
   simulation_cutfl: 35,
+  simulation_topik: 35,
 };
 
 const DURATION: Record<ReviewType, number> = {
@@ -31,6 +33,7 @@ const DURATION: Record<ReviewType, number> = {
   simulation_toeic: 30,
   simulation_ielts: 30,
   simulation_cutfl: 30,
+  simulation_topik: 30,
 };
 
 function buildPrompt(
@@ -40,10 +43,12 @@ function buildPrompt(
   level: string,
   count: number
 ): string {
-  const lang = language === "english" ? "English" : "Thai";
+  const lang = language === "english" ? "English" : language === "korean" ? "Korean" : "Thai";
   const langNote =
     language === "english"
       ? "Questions and options in English, explanation in Vietnamese."
+      : language === "korean"
+      ? "Questions and options in Korean (with Vietnamese translation where helpful), explanation in Vietnamese."
       : "Questions and options in Thai (with Vietnamese translation where helpful), explanation in Vietnamese.";
 
   const typeDesc: Record<ReviewType, string> = {
@@ -55,6 +60,7 @@ function buildPrompt(
     simulation_toeic: `Simulate a TOEIC Part 5 (incomplete sentence grammar/vocab) test. ${count} questions at B1-B2 business English level. Each question is one sentence with one blank and 4 options.`,
     simulation_ielts: `Simulate an IELTS Academic reading comprehension test. ${count} questions including True/False/Not Given, multiple choice, and vocabulary in context at B2-C1 level.`,
     simulation_cutfl: `Simulate a CU-TFL Thai proficiency test. Mix of vocabulary, grammar, and reading comprehension for Thai language.`,
+    simulation_topik: `Simulate a TOPIK (Test of Proficiency in Korean) test. ${count} questions including vocabulary, grammar, and reading comprehension in Korean language at intermediate level.`,
   };
 
   return `You are a ${lang} language teacher creating a quiz for Vietnamese learners.

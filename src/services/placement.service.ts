@@ -9,7 +9,7 @@ export async function submitPlacementTest(
   clientLevel?: string,
   testType?: string
 ) {
-  if (!["english", "thai"].includes(language)) throw new Error("Invalid language");
+  if (!["english", "thai", "korean"].includes(language)) throw new Error("Invalid language");
 
   const level = clientLevel ?? scoreToLevel(score);
   const test = await prisma.placementTest.create({

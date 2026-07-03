@@ -24,6 +24,7 @@ const LESSON_LABELS: Record<string, string> = {
 const LANG_COLOR = {
   english: { bg: "bg-blue-500", light: "bg-blue-50 border-blue-200 text-blue-700", dot: "bg-blue-400", label: "EN" },
   thai: { bg: "bg-red-500", light: "bg-red-50 border-red-200 text-red-700", dot: "bg-red-400", label: "TH" },
+  korean: { bg: "bg-violet-500", light: "bg-violet-50 border-violet-200 text-violet-700", dot: "bg-violet-400", label: "KR" },
 };
 
 export type LessonDay = {

@@ -4,8 +4,8 @@ import { getIeltsQuestions, calculateIeltsResult, type IeltsQuestion } from "./i
 import { getCutflQuestions, calculateCutflResult, type CutflQuestion } from "./cutfl-data";
 import type { Question } from "./placement-data";
 
-export type TestType = "cefr" | "toeic" | "ielts" | "cutfl";
-export type Language = "english" | "thai";
+export type TestType = "cefr" | "toeic" | "ielts" | "cutfl" | "topik";
+export type Language = "english" | "thai" | "korean";
 
 export type ActiveQuestion = {
   id: string;
@@ -27,6 +27,7 @@ export type PlacementResult = {
 export const TEST_TYPES: Record<Language, TestType[]> = {
   english: ["cefr", "toeic", "ielts"],
   thai: ["cefr", "cutfl"],
+  korean: ["cefr", "topik"],
 };
 
 export const TEST_META: Record<TestType, { label: string; desc: string; questionCount: number }> = {
@@ -50,6 +51,11 @@ export const TEST_META: Record<TestType, { label: string; desc: string; question
     desc: "20 câu · Level 1–5 · Từ vựng + Ngữ pháp + Đọc hiểu",
     questionCount: 20,
   },
+  topik: {
+    label: "TOPIK (Tiếng Hàn cho người nước ngoài)",
+    desc: "20 câu · TOPIK I & II · Từ vựng + Ngữ pháp + Đọc hiểu",
+    questionCount: 20,
+  },
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,14 +63,19 @@ function castAs<T>(v: unknown): T { return v as T; }
 
 export function getTestQuestions(language: Language, testType: TestType): ActiveQuestion[] {
   switch (testType) {
-    case "cefr":
-      return castAs<ActiveQuestion[]>(getQuestionsForTest(language));
+    case "cefr": {
+      const cefrLang: "english" | "thai" = language === "thai" ? "thai" : "english";
+      return castAs<ActiveQuestion[]>(getQuestionsForTest(cefrLang));
+    }
     case "toeic":
       return castAs<ActiveQuestion[]>(getToeicQuestions());
     case "ielts":
       return castAs<ActiveQuestion[]>(getIeltsQuestions());
     case "cutfl":
       return castAs<ActiveQuestion[]>(getCutflQuestions());
+    case "topik":
+      // TOPIK uses the general CEFR question set until dedicated TOPIK questions are added
+      return castAs<ActiveQuestion[]>(getQuestionsForTest("english" as "english" | "thai"));
   }
 }
 
@@ -98,5 +109,23 @@ export function calculateTestResult(
       return calculateIeltsResult(castAs<IeltsQuestion[]>(questions), answers);
     case "cutfl":
       return calculateCutflResult(castAs<CutflQuestion[]>(questions), answers);
+    case "topik": {
+      const score = calculateScore(castAs<Question[]>(questions), answers);
+      const level = determineLevel(castAs<Question[]>(questions), answers);
+      const TOPIK_DESC: Record<string, string> = {
+        A1: "TOPIK I – Cấp độ 1. Biết từ và câu cơ bản nhất.",
+        A2: "TOPIK I – Cấp độ 2. Giao tiếp được trong tình huống hàng ngày.",
+        B1: "TOPIK II – Cấp độ 3. Dùng tiếng Hàn trong hầu hết tình huống.",
+        B2: "TOPIK II – Cấp độ 4. Giao tiếp trôi chảy về nhiều chủ đề.",
+        C1: "TOPIK II – Cấp độ 5. Sử dụng tiếng Hàn trong học thuật và công việc.",
+        C2: "TOPIK II – Cấp độ 6. Thành thạo, gần như tương đương người bản ngữ.",
+      };
+      return {
+        score,
+        level,
+        rawLabel: `TOPIK ${level}`,
+        description: TOPIK_DESC[level] ?? "",
+      };
+    }
   }
 }
