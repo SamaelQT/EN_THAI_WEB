@@ -244,6 +244,17 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
   const [quizSelected, setQuizSelected] = useState<number | null>(null);
   const [quizScore, setQuizScore] = useState(0);
 
+  // Writing lesson state
+  const [writingText, setWritingText] = useState("");
+  const [writingFeedback, setWritingFeedback] = useState<{
+    score: number;
+    feedback: string;
+    strengths?: string[];
+    improvements?: string[];
+    corrections?: { original: string; corrected: string; note: string }[];
+  } | null>(null);
+  const [isEvaluatingWriting, setIsEvaluatingWriting] = useState(false);
+
   // Checkpoint quiz state (after completing 5 days)
   const [checkpointReady, setCheckpointReady] = useState(false);
   const [checkpointTopics, setCheckpointTopics] = useState<string[]>([]);
@@ -468,6 +479,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
     setSpeakingIdx(null);
     setMicPhraseIdx(null);
     setMicResults({});
+    // reset writing state
+    setWritingText("");
+    setWritingFeedback(null);
     stopAll();
 
     if (cached) {
@@ -546,6 +560,31 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
       toast.success(`Kiểm tra tổng hợp: ${pct}% · ${pct >= 70 ? "Xuất sắc! 🎉" : "Cố gắng thêm! 💪"}`, { duration: 5000 });
     } else {
       finishLesson(newScore, currentQuiz.length);
+    }
+  }
+
+  async function evaluateWriting() {
+    if (writingText.trim().length < 30) return;
+    setIsEvaluatingWriting(true);
+    setWritingFeedback(null);
+    try {
+      const res = await fetch("/api/lessons/writing-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          writing: writingText,
+          prompt: activeLesson?.prompt ?? "",
+          guide: activeLesson?.guide ?? "",
+          language: activeLessonLang,
+          level: activeLessonLevel,
+        }),
+      });
+      const data = await res.json();
+      setWritingFeedback(data);
+    } catch {
+      toast.error("Không thể nhận xét bài viết. Thử lại sau.");
+    } finally {
+      setIsEvaluatingWriting(false);
     }
   }
 
@@ -1211,7 +1250,20 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
   // ── Learning screen ───────────────────────────────────────────
   if (lessonState === "learning" && activeLesson) {
     const isListeningLesson = activeLessonKey.startsWith("listening_") || !!activeLesson.transcript;
+    const isWritingLesson = !!activeLesson.prompt;
+    const isSpeakingLesson = !!activeLesson.phrases;
     const quizLocked = isListeningLesson && !audioRevealed;
+
+    const LESSON_TYPE_META: Record<string, { icon: string; label: string; instruction: string }> = {
+      vocabulary: { icon: "📚", label: "Từ vựng", instruction: "Đọc từ mới → nhấn 🔊 để nghe phát âm → làm bài kiểm tra" },
+      grammar:    { icon: "📝", label: "Ngữ pháp", instruction: "Đọc kỹ giải thích & ví dụ → làm bài kiểm tra" },
+      listening:  { icon: "🎧", label: "Nghe",     instruction: "Nhấn PLAY để nghe → sau đó xem transcript → làm bài kiểm tra" },
+      reading:    { icon: "📖", label: "Đọc hiểu", instruction: "Đọc đoạn văn → trả lời câu hỏi" },
+      speaking:   { icon: "🗣️", label: "Nói",     instruction: "Nhấn 🔊 để nghe mẫu → nhấn 🎤 để luyện phát âm của bạn" },
+      writing:    { icon: "✍️", label: "Viết",    instruction: "Đọc đề bài → viết bài của bạn → nhận AI nhận xét → làm bài kiểm tra" },
+      review:     { icon: "🔄", label: "Ôn tập",  instruction: "Ôn lại kiến thức trong tuần → làm bài kiểm tra tổng hợp" },
+    };
+    const lessonMeta = LESSON_TYPE_META[activeLessonType] ?? LESSON_TYPE_META.vocabulary;
 
     return (
       <div className="max-w-2xl mx-auto space-y-6">
@@ -1232,6 +1284,16 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
             </button>
           </div>
         </div>
+
+        {/* Lesson type indicator */}
+        <div className="rounded-lg border bg-muted/30 px-4 py-2.5 flex items-start gap-3">
+          <span className="text-xl shrink-0">{lessonMeta.icon}</span>
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{lessonMeta.label}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{lessonMeta.instruction}</p>
+          </div>
+        </div>
+
         <h2 className="text-xl font-bold">{activeLesson.title}</h2>
 
         {/* B1 – Vocabulary with TTS buttons */}
@@ -1578,15 +1640,42 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
           <div className="space-y-3">
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base">✏️ Đề bài</CardTitle></CardHeader>
-              <CardContent><p className="text-sm">{activeLesson.prompt}</p></CardContent>
+              <CardContent><p className="text-sm leading-relaxed">{activeLesson.prompt}</p></CardContent>
             </Card>
-            {activeLesson.tips && (
+            {/* Writing structure guide */}
+            {activeLesson.structure && activeLesson.structure.length > 0 && (
               <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-base">Gợi ý</CardTitle></CardHeader>
+                <CardHeader className="pb-2"><CardTitle className="text-base">📋 Cấu trúc bài viết</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  {activeLesson.structure.map((s: { part: string; guide: string }, i: number) => (
+                    <div key={i} className="text-sm">
+                      <p className="font-semibold text-primary">{s.part}</p>
+                      <p className="text-muted-foreground text-xs mt-0.5">{s.guide}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+            {activeLesson.useful_phrases && activeLesson.useful_phrases.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-base">💡 Cụm từ hữu ích</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {activeLesson.useful_phrases.map((phrase: string, i: number) => (
+                      <span key={i} className="text-xs bg-primary/10 text-primary rounded-full px-2.5 py-1">{phrase}</span>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {/* Fallback for old/generic tips array */}
+            {activeLesson.tips && !activeLesson.structure && (
+              <Card>
+                <CardHeader className="pb-2"><CardTitle className="text-base">💡 Gợi ý</CardTitle></CardHeader>
                 <CardContent>
                   <ul className="space-y-1">
                     {activeLesson.tips.map((tip: string, i: number) => (
-                      <li key={i} className="text-sm">• {tip}</li>
+                      <li key={i} className="text-sm text-muted-foreground">• {tip}</li>
                     ))}
                   </ul>
                 </CardContent>
@@ -1594,8 +1683,89 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
             )}
             {activeLesson.example && (
               <Card className="border-dashed">
-                <CardHeader className="pb-2"><CardTitle className="text-base">Bài mẫu</CardTitle></CardHeader>
-                <CardContent><p className="text-sm italic text-muted-foreground">{activeLesson.example}</p></CardContent>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base text-muted-foreground">📄 Bài mẫu tham khảo</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground italic leading-relaxed whitespace-pre-line">{activeLesson.example}</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* ── Write area ── */}
+            <Card className="border-primary/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">✍️ Bài viết của bạn</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <textarea
+                  value={writingText}
+                  onChange={(e) => setWritingText(e.target.value)}
+                  placeholder="Viết bài của bạn ở đây. Cố gắng dùng từ vựng và cấu trúc ngữ pháp đã học..."
+                  rows={8}
+                  className="w-full text-sm border rounded-lg p-3 resize-y bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 transition-shadow"
+                />
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    {writingText.trim().split(/\s+/).filter(Boolean).length} từ
+                  </span>
+                  <Button
+                    size="sm"
+                    onClick={evaluateWriting}
+                    disabled={writingText.trim().length < 30 || isEvaluatingWriting}
+                  >
+                    {isEvaluatingWriting ? (
+                      <><Loader2 className="mr-2 h-3 w-3 animate-spin" />Đang chấm...</>
+                    ) : (
+                      "AI nhận xét bài viết →"
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* ── AI Feedback ── */}
+            {writingFeedback && (
+              <Card className="border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/20">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base">📊 Nhận xét của AI</CardTitle>
+                    <span className={`text-xl font-bold ${writingFeedback.score >= 70 ? "text-green-600 dark:text-green-400" : writingFeedback.score >= 50 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
+                      {writingFeedback.score}<span className="text-sm font-normal text-muted-foreground">/100</span>
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm leading-relaxed">{writingFeedback.feedback}</p>
+                  {writingFeedback.strengths && writingFeedback.strengths.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-green-700 dark:text-green-400">✅ Điểm mạnh</p>
+                      {writingFeedback.strengths.map((s, i) => (
+                        <p key={i} className="text-xs text-muted-foreground">• {s}</p>
+                      ))}
+                    </div>
+                  )}
+                  {writingFeedback.improvements && writingFeedback.improvements.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">💡 Cần cải thiện</p>
+                      {writingFeedback.improvements.map((imp, i) => (
+                        <p key={i} className="text-xs text-muted-foreground">• {imp}</p>
+                      ))}
+                    </div>
+                  )}
+                  {writingFeedback.corrections && writingFeedback.corrections.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-red-700 dark:text-red-400">✏️ Sửa lỗi cụ thể</p>
+                      {writingFeedback.corrections.map((c, i) => (
+                        <div key={i} className="text-xs rounded-lg bg-background border p-2.5 space-y-1">
+                          <p className="line-through text-red-600 dark:text-red-400 leading-relaxed">{c.original}</p>
+                          <p className="text-green-700 dark:text-green-400 leading-relaxed">→ {c.corrected}</p>
+                          {c.note && <p className="text-muted-foreground italic">{c.note}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
               </Card>
             )}
           </div>
@@ -1608,6 +1778,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
               {activeLesson.phrases.map((p: any, i: number) => {
                 const result = micResults[i];
                 const isRecording = micPhraseIdx === i;
+                const isSpeakingThis = speakingIdx === i;
                 return (
                   <Card key={i}>
                     <CardContent className="pt-4 pb-4 space-y-3">
@@ -1616,19 +1787,32 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                           <p className="font-bold text-lg">{p.phrase}</p>
                           <p className="text-sm text-muted-foreground">{p.phonetic}</p>
                           <p className="text-primary font-medium mt-1">{p.meaning}</p>
+                          {p.context && <p className="text-xs text-muted-foreground/70 mt-1 italic">💬 {p.context}</p>}
                         </div>
-                        <Button
-                          size="sm"
-                          variant={isRecording ? "destructive" : "outline"}
-                          onClick={() => isRecording ? stopMic() : startMic(i, p.phrase)}
-                          className="gap-1.5 shrink-0"
-                        >
-                          {isRecording ? (
-                            <><Square size={14} />Dừng</>
-                          ) : (
-                            <><Mic size={14} />Luyện phát âm</>
-                          )}
-                        </Button>
+                        <div className="flex gap-2 shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => speakWord(p.phrase, i)}
+                            disabled={isSpeakingThis}
+                            className="gap-1.5"
+                            title="Nghe phát âm mẫu"
+                          >
+                            {isSpeakingThis ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={isRecording ? "destructive" : "outline"}
+                            onClick={() => isRecording ? stopMic() : startMic(i, p.phrase)}
+                            className="gap-1.5"
+                          >
+                            {isRecording ? (
+                              <><Square size={14} />Dừng</>
+                            ) : (
+                              <><Mic size={14} />Luyện</>
+                            )}
+                          </Button>
+                        </div>
                       </div>
                       {isRecording && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1683,6 +1867,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
           </Button>
           {quizLocked && (
             <p className="text-xs text-center text-muted-foreground">Nghe xong bài hội thoại trước nhé</p>
+          )}
+          {isWritingLesson && !quizLocked && writingText.trim().length === 0 && (
+            <p className="text-xs text-center text-muted-foreground">💡 Bạn chưa viết bài — hãy thử viết trước để học hiệu quả hơn</p>
           )}
         </div>
       </div>
