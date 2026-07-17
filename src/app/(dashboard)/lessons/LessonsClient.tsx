@@ -244,6 +244,13 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
   const [quizSelected, setQuizSelected] = useState<number | null>(null);
   const [quizScore, setQuizScore] = useState(0);
 
+  // Checkpoint quiz state (after completing 5 days)
+  const [checkpointReady, setCheckpointReady] = useState(false);
+  const [checkpointTopics, setCheckpointTopics] = useState<string[]>([]);
+  const [checkpointQuiz, setCheckpointQuiz] = useState<{ q: string; options: string[]; answer: number }[] | null>(null);
+  const [isCheckpointQuiz, setIsCheckpointQuiz] = useState(false);
+  const [isLoadingCheckpoint, setIsLoadingCheckpoint] = useState(false);
+
   // B1 – TTS per vocabulary word
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
   // B2 – Listening
@@ -519,17 +526,50 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
 
   function nextQuizQuestion() {
     if (quizSelected === null) return;
-    const correct = activeLesson.quiz[quizIndex].answer;
+    const currentQuiz = isCheckpointQuiz && checkpointQuiz ? checkpointQuiz : activeLesson.quiz;
+    const correct = currentQuiz[quizIndex].answer;
     const newScore = quizScore + (quizSelected === correct ? 1 : 0);
     const newAnswers = [...quizAnswers, quizSelected];
     setQuizScore(newScore);
     setQuizAnswers(newAnswers);
     setQuizSelected(null);
 
-    if (quizIndex + 1 < activeLesson.quiz.length) {
+    if (quizIndex + 1 < currentQuiz.length) {
       setQuizIndex(quizIndex + 1);
+    } else if (isCheckpointQuiz) {
+      const pct = Math.round((newScore / currentQuiz.length) * 100);
+      setQuizScore(pct);
+      setIsCheckpointQuiz(false);
+      setCheckpointReady(false);
+      setCheckpointQuiz(null);
+      setLessonState("done");
+      toast.success(`Kiểm tra tổng hợp: ${pct}% · ${pct >= 70 ? "Xuất sắc! 🎉" : "Cố gắng thêm! 💪"}`, { duration: 5000 });
     } else {
-      finishLesson(newScore, activeLesson.quiz.length);
+      finishLesson(newScore, currentQuiz.length);
+    }
+  }
+
+  async function startCheckpointQuiz() {
+    setIsLoadingCheckpoint(true);
+    try {
+      const res = await fetch("/api/lessons/checkpoint-quiz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topics: checkpointTopics, language: activeLessonLang, level: activeLessonLevel }),
+      });
+      const data = await res.json();
+      if (!data.quiz?.length) throw new Error("no quiz");
+      setCheckpointQuiz(data.quiz);
+      setIsCheckpointQuiz(true);
+      setQuizIndex(0);
+      setQuizSelected(null);
+      setQuizScore(0);
+      setQuizAnswers([]);
+      setLessonState("quiz");
+    } catch {
+      toast.error("Không thể tạo bài kiểm tra tổng hợp. Thử lại sau.");
+    } finally {
+      setIsLoadingCheckpoint(false);
     }
   }
 
@@ -563,6 +603,11 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
         for (const name of data.newAchievements) {
           toast.success(`🏅 Thành tích mới: ${name}`, { duration: 5000 });
         }
+      }
+      if (data.checkpointReady && data.checkpointTopics?.length >= 3) {
+        setCheckpointReady(true);
+        setCheckpointTopics(data.checkpointTopics);
+        toast.success("🎯 Bạn đã học 5 bài! Thử bài kiểm tra tổng hợp →", { duration: 6000 });
       }
       router.refresh();
     } catch {
@@ -1045,8 +1090,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
   }
 
   // ── Quiz screen ───────────────────────────────────────────────
-  if (lessonState === "quiz" && activeLesson) {
-    const q = activeLesson.quiz[quizIndex];
+  if (lessonState === "quiz" && (activeLesson || (isCheckpointQuiz && checkpointQuiz))) {
+    const currentQuiz = isCheckpointQuiz && checkpointQuiz ? checkpointQuiz : activeLesson?.quiz ?? [];
+    const q = currentQuiz[quizIndex];
 
     // Strip leading letter/number labels the AI sometimes embeds: "A) text", "A. text", "1) text"
     function cleanOption(opt: string): string {
@@ -1056,10 +1102,12 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-lg">Kiểm tra nhanh</h2>
-          <span className="text-sm text-muted-foreground">{quizIndex + 1}/{activeLesson.quiz.length}</span>
+          <h2 className="font-bold text-lg">
+            {isCheckpointQuiz ? "🎯 Kiểm tra tổng hợp" : "Kiểm tra nhanh"}
+          </h2>
+          <span className="text-sm text-muted-foreground">{quizIndex + 1}/{currentQuiz.length}</span>
         </div>
-        <Progress value={((quizIndex) / activeLesson.quiz.length) * 100} />
+        <Progress value={((quizIndex) / currentQuiz.length) * 100} />
         <Card>
           <CardContent className="pt-6">
             <p className="font-medium text-lg mb-6">{q.q}</p>
@@ -1091,7 +1139,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
           </CardContent>
         </Card>
         <Button onClick={nextQuizQuestion} disabled={quizSelected === null} className="w-full" size="lg">
-          {quizIndex + 1 === activeLesson.quiz.length ? "Hoàn thành" : "Tiếp theo →"}
+          {quizIndex + 1 === currentQuiz.length ? "Hoàn thành" : "Tiếp theo →"}
         </Button>
       </div>
     );
@@ -1115,8 +1163,38 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
             </p>
           </CardContent>
         </Card>
+
+        {/* Checkpoint quiz CTA after completing day 5 */}
+        {checkpointReady && (
+          <div className="rounded-lg border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-4 text-left space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🎯</span>
+              <div>
+                <h3 className="font-bold text-amber-800 dark:text-amber-300">Bài kiểm tra tổng hợp</h3>
+                <p className="text-xs text-amber-700 dark:text-amber-400">Bạn đã hoàn thành 5 bài học trong tuần này!</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {checkpointTopics.map((t, i) => (
+                <Badge key={i} variant="outline" className="text-xs border-amber-400 text-amber-700 dark:text-amber-300">{t}</Badge>
+              ))}
+            </div>
+            <Button
+              onClick={startCheckpointQuiz}
+              disabled={isLoadingCheckpoint}
+              className="w-full bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              {isLoadingCheckpoint ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Đang tạo bài kiểm tra...</>
+              ) : (
+                "Bắt đầu kiểm tra tổng hợp (10 câu) →"
+              )}
+            </Button>
+          </div>
+        )}
+
         <div className="flex gap-3 justify-center flex-wrap">
-          <Button variant="outline" onClick={() => setLessonState("list")}>Quay lại</Button>
+          <Button variant="outline" onClick={() => { setCheckpointReady(false); setCheckpointTopics([]); setLessonState("list"); }}>Quay lại</Button>
           <Button variant="outline" onClick={() => { setLessonState("learning"); setQuizIndex(0); setQuizSelected(null); setQuizScore(0); setQuizAnswers([]); }}>
             Học lại
           </Button>

@@ -121,51 +121,61 @@ IELTS SPEAKING:
   }
 
   // Per-lesson-type quiz specification
+  // CRITICAL RULE applied to ALL types: quiz must test ONLY what appears in this lesson's content.
+  // A student who read this lesson carefully should answer all 6 correctly.
+  // A student who skipped this lesson should find the quiz challenging.
   const quizSpecs: Record<string, string> = {
-    grammar: `GRAMMAR QUIZ — 6 questions, ALL written in English, testing ONLY the grammar point "${topic ?? "this lesson"}":
-- Q1: Fill-in-blank: "She ___ (go) to the meeting tomorrow." → 4 verb form options in English
-- Q2: Fill-in-blank: another sentence using the same grammar point → 4 English options
-- Q3: "Which sentence is grammatically correct?" → 4 complete English sentences (only 1 correct)
-- Q4: "Identify the error: [incorrect English sentence]" → 4 corrected English sentences (1 correct)
-- Q5: "Choose the sentence that expresses [usage case of this grammar]" → 4 English sentences
-- Q6: "Which sentence correctly uses [grammar point] in a real-life situation?" → 4 English sentences
+    grammar: `GRAMMAR QUIZ — 6 questions in English, testing ONLY "${topic ?? "this lesson's grammar point"}":
+⚠️ ALIGNMENT: Every question MUST use the SAME sentence patterns and contexts from YOUR explanation section above.
+- Q1: Fill-in-blank using a sentence pattern FROM your explanation (cases or examples you already wrote) → 4 verb/word form options
+- Q2: Fill-in-blank with a different sentence from your lesson's examples → 4 options
+- Q3: "Which sentence is correct?" → 4 complete sentences all using this grammar point; base them on your explanation's usage cases
+- Q4: "Identify the error" → use a SPECIFIC wrong pattern from your 'Lỗi thường gặp ❌→✅' section above
+- Q5: "Choose the sentence that expresses [one of YOUR explanation's usage cases]" → 4 options
+- Q6: Real-life sentence in the contexts YOUR lesson covered → 4 options
 ALL questions and options in English. Zero Vietnamese in questions or options.`,
 
-    vocabulary: `VOCABULARY QUIZ — 6 questions testing the 10 words from this lesson:
-- Q1-Q3: Fill-in-blank in English: "The accountant prepared the ___ for the client." → 4 English word options from lesson vocabulary
-- Q4-Q5: "Which sentence uses [word] correctly?" → 4 complete English sentences
-- Q6: "What does '[word from lesson]' mean?" → 4 Vietnamese meaning options (this is the ONLY Vietnamese question)
-Questions Q1-Q5 written in English. Q6 written in English too, only options in Vietnamese.`,
+    vocabulary: `VOCABULARY QUIZ — 6 questions using ONLY the words from your words array above:
+⚠️ ALIGNMENT: Q1-Q5 MUST use exact words from your words array. NEVER test a word not in this lesson.
+- Q1-Q3: Fill-in-blank using context similar to the example sentences in your words array → 4 word options (all from your words array)
+- Q4-Q5: "Which sentence uses '[exact word from your words array]' correctly?" → 4 complete English sentences
+- Q6: "What does '[word from your words array]' mean?" → 4 Vietnamese meaning options
+Questions Q1-Q5 in English. Q6 in English with Vietnamese options only.`,
 
-    reading: `READING QUIZ — 6 questions about the passage content (remember: the passage itself must be 100% English/Thai):
-- Q1-Q3: Comprehension questions in Vietnamese asking about passage content → options in English (phrases/sentences from or about the passage)
-- Q4: Vocabulary question in English: "In the passage, '[word]' most likely means..." → 4 English options
-- Q5: Inference question in Vietnamese → options in English sentences
-- Q6: Main idea question in Vietnamese → options in English phrases`,
+    reading: `READING QUIZ — 6 questions about YOUR passage above:
+⚠️ ALIGNMENT: EVERY question must be answerable from the passage you just wrote. No outside knowledge needed.
+- Q1-Q3: Comprehension questions in Vietnamese asking about SPECIFIC information in YOUR passage → options in English (phrases taken directly from or closely paraphrasing the passage)
+- Q4: Vocabulary in context from YOUR passage: "In the passage, '[word from your passage]' most likely means..." → 4 English options
+- Q5: Inference question in Vietnamese about something IMPLIED by YOUR passage content → options in English
+- Q6: Main idea/purpose in Vietnamese → options matching YOUR passage's actual topic and scope`,
 
-    listening: `LISTENING QUIZ — 6 questions about the transcript:
-- Q1-Q3: Comprehension questions in Vietnamese → options in English (words/phrases from the transcript)
-- Q4: "What does '[speaker]' say about...?" (Vietnamese question) → options in English
-- Q5: Vocabulary/phrase question in English from key_phrases → 4 English options
-- Q6: Purpose/tone question in Vietnamese → options in English phrases`,
+    listening: `LISTENING QUIZ — 6 questions about YOUR transcript above:
+⚠️ ALIGNMENT: EVERY question must be answerable from your transcript. No outside knowledge needed.
+- Q1-Q3: Comprehension questions in Vietnamese about SPECIFIC information in YOUR transcript → options in English (words/phrases from your transcript)
+- Q4: "What does [speaker from your transcript] say about [topic from your transcript]?" in Vietnamese → options in English
+- Q5: Test one of YOUR key_phrases: "What does '[phrase from your key_phrases]' mean?" or a usage question → 4 English options
+- Q6: Purpose/tone of YOUR specific conversation or monologue → options in English`,
 
-    speaking: `SPEAKING QUIZ — 6 questions in English testing the phrases from this lesson:
-- Q1-Q2: "Which phrase is most appropriate when [situation]?" → 4 English phrase options
-- Q3-Q4: Fill-in-blank with the correct phrase from the lesson → 4 English options
-- Q5: "What does '[phrase from lesson]' mean?" → 4 Vietnamese options
-- Q6: "In which situation would you use '[phrase]'?" → 4 English situational options`,
+    speaking: `SPEAKING QUIZ — 6 questions using ONLY phrases from your phrases array above:
+⚠️ ALIGNMENT: ONLY test phrases that appear in your phrases array. Never invent new phrases.
+- Q1-Q2: "Which phrase is most appropriate when [situation from YOUR lesson]?" → 4 options all from YOUR phrases array
+- Q3-Q4: Fill-in-blank: complete the dialogue using a phrase from YOUR phrases array → 4 options from your array
+- Q5: "What does '[exact phrase from YOUR array]' mean?" → 4 Vietnamese options
+- Q6: "In which situation would you use '[phrase from YOUR array]'?" → 4 situational options`,
 
-    writing: `WRITING QUIZ — 6 questions about writing skills:
-- Q1-Q3: Questions in English testing sentence structure and vocabulary from this lesson → English options
-- Q4: Fill-in-blank with correct linking word/phrase → English options
-- Q5: "Which paragraph structure is correct for this writing type?" → English options
-- Q6: "What does '[useful phrase]' mean?" → 4 Vietnamese options`,
+    writing: `WRITING QUIZ — 6 questions about the writing skills in YOUR guide section above:
+⚠️ ALIGNMENT: Test ONLY structures, linking words, and phrases taught in YOUR guide and example text.
+- Q1-Q3: Questions in English testing sentence structure / vocabulary FROM this lesson → English options
+- Q4: Fill-in-blank with correct linking word/phrase FROM your guide's examples → English options
+- Q5: "Which structure is correct for [writing type from YOUR lesson]?" → English options based on YOUR guide
+- Q6: "What does '[useful phrase from YOUR example text]' mean?" → 4 Vietnamese options`,
 
-    review: `REVIEW QUIZ — 6 mixed questions in English reviewing the week's grammar and vocabulary:
-- Q1-Q2: Grammar fill-in-blank in English → English options
-- Q3-Q4: Vocabulary usage in English sentences → English options
-- Q5: "Which sentence uses [this week's grammar] correctly?" → English options
-- Q6: "What does '[vocabulary word]' mean?" → Vietnamese meaning options`,
+    review: `REVIEW QUIZ — 6 mixed questions reviewing the week's content:
+⚠️ ALIGNMENT: Use ONLY words from your words array and grammar from your summary/explanation above.
+- Q1-Q2: Grammar fill-in-blank using the grammar points in YOUR summary → English options
+- Q3-Q4: Vocabulary usage from YOUR words array in English sentences → English options
+- Q5: "Which sentence correctly uses [grammar/vocab from YOUR lesson]?" → English options
+- Q6: "What does '[word from YOUR words array]' mean?" → Vietnamese meaning options`,
   };
 
   const quizRequirements = quizSpecs[lessonType] ?? quizSpecs.vocabulary;
@@ -283,6 +293,12 @@ ${quizRequirements}
 - Depth must be enough that the learner genuinely understands after one read
 - Difficulty must match level ${level} precisely
 
+=== QUIZ ALIGNMENT — MANDATORY ===
+After writing the lesson content, generate the quiz LAST. For each question ask yourself:
+"Is this word / grammar structure / sentence actually IN the lesson content I just wrote?"
+If the answer is NO → rewrite the question using content that IS in the lesson.
+A learner who read ONLY this lesson should answer ALL 6 quiz questions correctly.
+
 Return valid JSON matching the schema below. NO text outside the JSON object:
 
 ${schema}`;
@@ -383,6 +399,9 @@ export async function completeLesson(
 
   // ── Roadmap progression ─────────────────────────────────────
   let weekAdvanced = false;
+  let checkpointReady = false;
+  let checkpointTopics: string[] = [];
+
   if (dayId) {
     const day = await prisma.roadmapDay.findUnique({
       where: { id: dayId },
@@ -391,6 +410,24 @@ export async function completeLesson(
 
     if (day && day.week.roadmap.userId === userId && day.status !== "completed") {
       await prisma.roadmapDay.update({ where: { id: dayId }, data: { status: "completed", completedAt: new Date() } });
+
+      // ── Checkpoint after day 5: collect titles of days 1-5 for a summary quiz ──
+      if (day.dayNumber === 5) {
+        try {
+          const day1to5Ids = day.week.days
+            .filter((d) => d.dayNumber >= 1 && d.dayNumber <= 5)
+            .map((d) => `day_${d.id}`);
+          const lessonRecs = await prisma.lesson.findMany({
+            where: { id: { in: day1to5Ids }, NOT: { content: "{}" } },
+            select: { title: true },
+          });
+          const titles = lessonRecs.map((l) => l.title).filter(Boolean);
+          if (titles.length >= 3) {
+            checkpointReady = true;
+            checkpointTopics = titles;
+          }
+        } catch { /* ignore — checkpoint is optional */ }
+      }
 
       const allDone = day.week.days.map((d) => d.id === dayId ? { ...d, status: "completed" } : d).every((d) => d.status === "completed");
       if (allDone) {
@@ -409,7 +446,7 @@ export async function completeLesson(
     }
   }
 
-  return { xpGained, newStreak, newAchievements, weekAdvanced };
+  return { xpGained, newStreak, newAchievements, weekAdvanced, checkpointReady, checkpointTopics };
 }
 
 // ── ETS quiz replacement ───────────────────────────────────────────────────
