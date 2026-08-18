@@ -9,7 +9,12 @@ export const authConfig: NextAuthConfig = {
       const isLoggedIn = !!auth?.user;
       const { pathname } = request.nextUrl;
       const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register");
-      const isPublic = pathname === "/" || pathname.startsWith("/api/auth") || pathname === "/api/user/register";
+      const isPublic =
+        pathname === "/" ||
+        pathname.startsWith("/api/auth") ||
+        pathname === "/api/user/register" ||
+        // Scheduler endpoints authenticate with CRON_SECRET, not a session cookie
+        pathname.startsWith("/api/cron");
 
       if (isPublic) return true;
       if (isAuthPage) return isLoggedIn ? Response.redirect(new URL("/dashboard", request.nextUrl)) : true;

@@ -28,7 +28,9 @@ export async function sendFriendRequest(userId: string, userName: string, email:
   if (!email) throw new FriendshipError("Email required", 400);
 
   const target = await prisma.user.findUnique({ where: { email } });
-  if (!target) throw new FriendshipError("Người dùng không tồn tại", 404);
+  // Same wording whether or not the address is registered — otherwise this endpoint
+  // becomes a way to check which emails have accounts here.
+  if (!target) throw new FriendshipError("Không gửi được lời mời tới email này", 404);
   if (target.id === userId) throw new FriendshipError("Không thể kết bạn với chính mình", 400);
 
   const existing = await prisma.friendship.findFirst({

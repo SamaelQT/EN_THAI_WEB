@@ -54,6 +54,58 @@ export class RoadmapServiceError extends Error {
   }
 }
 
+/**
+ * Delete a learner's roadmaps for one language, along with the per-day lesson rows.
+ *
+ * Each roadmap day caches its generated content in a `Lesson` row keyed `day_<dayId>`.
+ * Deleting the roadmap cascades to weeks and days but not to those lessons, so they used
+ * to pile up as orphans that nothing could ever reach again.
+ */
+export async function deleteRoadmapsForLanguage(userId: string, language: string) {
+  const roadmaps = await prisma.roadmap.findMany({
+    where: { userId, language },
+    include: { weeks: { include: { days: { select: { id: true } } } } },
+  });
+  await deleteRoadmapRows(roadmaps, () => prisma.roadmap.deleteMany({ where: { userId, language } }));
+}
+
+/** Delete a single roadmap by id, cleaning up its cached day-lessons too. */
+export async function deleteRoadmapById(roadmapId: string) {
+  const roadmaps = await prisma.roadmap.findMany({
+    where: { id: roadmapId },
+    include: { weeks: { include: { days: { select: { id: true } } } } },
+  });
+  await deleteRoadmapRows(roadmaps, () => prisma.roadmap.delete({ where: { id: roadmapId } }));
+}
+
+type RoadmapWithDays = { weeks: { days: { id: string }[] }[] };
+
+async function deleteRoadmapRows(roadmaps: RoadmapWithDays[], remove: () => Promise<unknown>) {
+  if (roadmaps.length === 0) return;
+
+  const lessonIds = roadmaps
+    .flatMap((r) => r.weeks)
+    .flatMap((w) => w.days)
+    .map((d) => `day_${d.id}`);
+
+  await remove();
+
+  if (lessonIds.length > 0) {
+    // Only remove cached lesson content nobody has completed — completed rows are
+    // referenced by LessonProgress and are part of the learner's history.
+    const referenced = await prisma.lessonProgress.findMany({
+      where: { lessonId: { in: lessonIds } },
+      select: { lessonId: true },
+      distinct: ["lessonId"],
+    });
+    const keep = new Set(referenced.map((r) => r.lessonId));
+    const removable = lessonIds.filter((id) => !keep.has(id));
+    if (removable.length > 0) {
+      await prisma.lesson.deleteMany({ where: { id: { in: removable } } });
+    }
+  }
+}
+
 export async function createRoadmap(
   userId: string,
   opts: {
@@ -129,7 +181,7 @@ export async function createRoadmap(
     targetExam ?? "general"
   );
 
-  await prisma.roadmap.deleteMany({ where: { userId, language } });
+  await deleteRoadmapsForLanguage(userId, language);
 
   return prisma.roadmap.create({
     data: {

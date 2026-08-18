@@ -34,11 +34,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
   if (membership?.role !== "admin") return NextResponse.json({ error: "Chỉ admin mới tạo được quiz" }, { status: 403 });
 
-  // Ensure no active session
+  // Ensure no active session — but auto-close one that's been abandoned for over an hour,
+  // otherwise an admin closing their tab blocks the group from ever starting another quiz.
   const existing = await prisma.quizSession.findFirst({
     where: { groupId, status: { in: ["waiting", "active"] } },
   });
-  if (existing) return NextResponse.json({ error: "Đang có quiz đang diễn ra" }, { status: 409 });
+  if (existing) {
+    const startedAt = existing.startedAt ?? existing.createdAt;
+    if (Date.now() - startedAt.getTime() > 60 * 60 * 1000) {
+      await prisma.quizSession.update({
+        where: { id: existing.id },
+        data: { status: "finished", finishedAt: new Date() },
+      });
+    } else {
+      return NextResponse.json(
+        { error: "Đang có quiz đang diễn ra", sessionId: existing.id },
+        { status: 409 },
+      );
+    }
+  }
 
   const { reviewSetId } = await req.json();
   if (!reviewSetId) return NextResponse.json({ error: "Thiếu reviewSetId" }, { status: 400 });

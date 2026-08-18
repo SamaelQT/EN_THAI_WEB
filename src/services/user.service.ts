@@ -28,6 +28,14 @@ export async function updateProfile(userId: string, data: { name?: string; bio?:
   return prisma.user.update({ where: { id: userId }, data });
 }
 
+/**
+ * Store the avatar in its own collection and keep only a short URL on User.
+ *
+ * The image used to live as a base64 data: URI directly in `User.image`, which meant
+ * every session lookup (i.e. every authenticated request) dragged up to 2MB out of the
+ * database. Now `User.image` is `/api/avatars/<userId>?v=<ts>` and the bytes are fetched
+ * only when a browser actually renders the picture — and then cached.
+ */
 export async function uploadAvatar(userId: string, file: File) {
   if (!ALLOWED_TYPES.includes(file.type))
     throw new UserServiceError("Chỉ chấp nhận ảnh JPG, PNG, WebP, GIF", 400);
@@ -36,8 +44,15 @@ export async function uploadAvatar(userId: string, file: File) {
 
   const bytes = await file.arrayBuffer();
   const base64 = Buffer.from(bytes).toString("base64");
-  const imageUrl = `data:${file.type};base64,${base64}`;
 
+  await prisma.userAvatar.upsert({
+    where: { userId },
+    update: { mimeType: file.type, data: base64 },
+    create: { userId, mimeType: file.type, data: base64 },
+  });
+
+  // Cache-busting suffix so the browser picks up a newly uploaded picture
+  const imageUrl = `/api/avatars/${userId}?v=${Date.now()}`;
   await prisma.user.update({ where: { id: userId }, data: { image: imageUrl } });
   return imageUrl;
 }

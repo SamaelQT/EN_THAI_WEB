@@ -13,15 +13,23 @@ export default async function DashboardLayout({
 
   const uid = session.user.id!;
 
-  const [friendRequestCount, groupInviteCount] = await Promise.all([
+  // Name + avatar are read here rather than inside the auth session callback: this runs
+  // once per page render instead of once per authenticated request, and `router.refresh()`
+  // after a profile edit picks up the change immediately without waiting for a token refresh.
+  const [friendRequestCount, groupInviteCount, profile] = await Promise.all([
     prisma.friendship.count({ where: { receiverId: uid, status: "pending" } }),
     prisma.studyGroupInvite.count({ where: { inviteeId: uid, status: "pending_invitee" } }),
+    prisma.user.findUnique({ where: { id: uid }, select: { name: true, image: true } }),
   ]);
 
   return (
     <div className="flex min-h-screen">
       <Sidebar
-        user={session.user}
+        user={{
+          ...session.user,
+          name: profile?.name ?? session.user.name,
+          image: profile?.image ?? session.user.image,
+        }}
         friendRequestCount={friendRequestCount}
         groupInviteCount={groupInviteCount}
       />

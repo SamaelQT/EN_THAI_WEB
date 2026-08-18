@@ -11,32 +11,55 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" },
   callbacks: {
-    async jwt({ token, user }) {
+    /**
+     * Name and avatar URL live in the token.
+     *
+     * They used to be re-read from the database inside `session()`, which meant one
+     * extra query on every authenticated request — and back when avatars were stored
+     * as base64 data URIs on `User`, that query hauled megabytes each time. Avatars are
+     * now a short `/api/avatars/<id>` URL, so the token can safely hold them.
+     *
+     * Freshness: refreshed when the client calls `useSession().update()` (after editing
+     * the profile) and otherwise at most once every PROFILE_TTL_MS.
+     */
+    async jwt({ token, user, trigger }) {
+      const PROFILE_TTL_MS = 15 * 60 * 1000;
+
       if (user) {
         token.id = user.id;
         token.email = user.email;
         token.name = user.name;
+        token.picture = user.image ?? null;
+        token.profileSyncedAt = Date.now();
+        return token;
       }
-      // Remove picture from JWT — NextAuth auto-maps user.image → token.picture.
-      // Large base64 images would overflow the cookie (4KB limit) and cause 502.
-      // Image is fetched fresh from DB in the session callback instead.
-      delete token.picture;
-      return token;
-    },
-    async session({ session, token }) {
-      if (token && session.user) {
-        session.user.id = token.id as string;
-        // Fetch latest name + image — wrapped in try/catch so a DB hiccup doesn't crash auth
+
+      const syncedAt = typeof token.profileSyncedAt === "number" ? token.profileSyncedAt : 0;
+      const stale = Date.now() - syncedAt > PROFILE_TTL_MS;
+
+      if (token.id && (trigger === "update" || stale)) {
         try {
           const fresh = await prisma.user.findUnique({
             where: { id: token.id as string },
             select: { name: true, image: true },
           });
-          session.user.name = fresh?.name ?? session.user.name;
-          session.user.image = fresh?.image ?? null;
+          if (fresh) {
+            token.name = fresh.name;
+            token.picture = fresh.image;
+          }
+          token.profileSyncedAt = Date.now();
         } catch {
-          // Fall back to token data — session is still valid
+          // Keep the previous values — a DB hiccup must not sign the user out
         }
+      }
+
+      return token;
+    },
+    async session({ session, token }) {
+      if (token && session.user) {
+        session.user.id = token.id as string;
+        session.user.name = (token.name as string | null) ?? session.user.name;
+        session.user.image = (token.picture as string | null) ?? null;
       }
       return session;
     },
@@ -68,9 +91,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             id: user.id,
             email: user.email,
             name: user.name,
-            // Do NOT include image here — base64 images blow up the JWT cookie size.
-            // The session callback fetches image fresh from DB on every request instead.
-            image: null,
+            // Safe to carry now: image is a short /api/avatars/<id> URL, not base64
+            image: user.image,
           };
         } catch (err) {
           console.error("[auth] authorize error:", err);

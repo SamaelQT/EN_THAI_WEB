@@ -78,12 +78,23 @@ export function isFeasible(
 
 // ─── Scheduling helpers ───────────────────────────────────────────────────────
 
+/**
+ * Normalise a busyDays array so scheduling can never loop forever.
+ * If the caller marks all 7 weekdays as busy there is no date left to schedule on,
+ * so we drop the constraint entirely rather than spinning.
+ */
+export function safeBusyDays(busyDays: number[] | null | undefined): number[] {
+  const unique = [...new Set((busyDays ?? []).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))];
+  return unique.length >= 7 ? [] : unique;
+}
+
 /** Next date strictly after `from` that is not a busy day */
 export function nextNonBusyDate(from: Date, busyDays: number[]): Date {
+  const busy = safeBusyDays(busyDays);
   const d = new Date(from);
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() + 1);
-  while (busyDays.includes(d.getDay())) {
+  while (busy.includes(d.getDay())) {
     d.setDate(d.getDate() + 1);
   }
   return d;
@@ -95,19 +106,21 @@ export function nextNonBusyDate(from: Date, busyDays: number[]): Date {
  * sessionsPerDay > 1 means the same calendar date is repeated that many times.
  */
 export function scheduleDates(startDate: Date, count: number, busyDays: number[], sessionsPerDay = 1): Date[] {
+  const busy = safeBusyDays(busyDays);
+  const perDay = Math.max(1, Math.floor(sessionsPerDay));
   const dates: Date[] = [];
   const d = new Date(startDate);
   d.setHours(0, 0, 0, 0);
   // If startDate itself is a busy day, advance to first non-busy
-  while (busyDays.includes(d.getDay())) {
+  while (busy.includes(d.getDay())) {
     d.setDate(d.getDate() + 1);
   }
   while (dates.length < count) {
-    for (let s = 0; s < sessionsPerDay && dates.length < count; s++) {
+    for (let s = 0; s < perDay && dates.length < count; s++) {
       dates.push(new Date(d));
     }
     d.setDate(d.getDate() + 1);
-    while (busyDays.includes(d.getDay())) {
+    while (busy.includes(d.getDay())) {
       d.setDate(d.getDate() + 1);
     }
   }
@@ -462,7 +475,7 @@ export function generateWeeklyPlan(
   if (language === "thai") {
     themes = THAI_WEEK_THEMES;
   } else if (language === "korean") {
-    themes = targetExam === "TOPIK" ? KOREAN_WEEK_THEMES : KOREAN_WEEK_THEMES;
+    themes = KOREAN_WEEK_THEMES;
   } else if (targetExam === "TOEIC") {
     themes = TOEIC_WEEK_THEMES;
   } else if (targetExam === "IELTS") {

@@ -1,39 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "fs/promises";
-import path from "path";
+import { prisma } from "@/lib/db";
 
-const UPLOAD_DIR = process.env.UPLOAD_DIR ?? path.join(/*turbopackIgnore: true*/ process.cwd(), "public", "avatars");
-
+/**
+ * Serve a user's avatar.
+ *
+ * The route segment is the user id (it used to be a filename back when avatars were
+ * written to disk — the name is kept so existing `User.image` URLs stay valid).
+ * Avatars are not secret, so no session is required; the id is unguessable enough
+ * and the image is already shown on public profiles.
+ */
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ filename: string }> }
 ) {
   const { filename } = await params;
 
-  // Security: block path traversal
-  if (filename.includes("..") || filename.includes("/")) {
+  // Ids are cuid-like: letters, digits, hyphens and underscores only
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(filename)) {
     return new NextResponse("Not found", { status: 404 });
   }
 
-  try {
-    const filePath = path.join(UPLOAD_DIR, filename);
-    const buffer = await readFile(filePath);
-    const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
-    const mimeMap: Record<string, string> = {
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      png: "image/png",
-      webp: "image/webp",
-      gif: "image/gif",
-    };
-    const contentType = mimeMap[ext] ?? "application/octet-stream";
-    return new NextResponse(buffer, {
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "public, max-age=31536000, immutable",
-      },
-    });
-  } catch {
-    return new NextResponse("Not found", { status: 404 });
-  }
+  const avatar = await prisma.userAvatar.findUnique({
+    where: { userId: filename },
+    select: { mimeType: true, data: true, updatedAt: true },
+  });
+  if (!avatar) return new NextResponse("Not found", { status: 404 });
+
+  const buffer = Buffer.from(avatar.data, "base64");
+
+  return new NextResponse(new Uint8Array(buffer), {
+    headers: {
+      "Content-Type": avatar.mimeType,
+      "Content-Length": String(buffer.byteLength),
+      // The URL carries a ?v= timestamp, so a stored copy is safe to keep
+      "Cache-Control": "private, max-age=86400",
+      "Last-Modified": avatar.updatedAt.toUTCString(),
+    },
+  });
 }

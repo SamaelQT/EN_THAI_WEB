@@ -12,6 +12,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (!Array.isArray(busyDays) || busyDays.some((d) => typeof d !== "number" || d < 0 || d > 6)) {
     return NextResponse.json({ error: "busyDays must be array of 0–6" }, { status: 400 });
   }
+  // All 7 days busy = no day left to study on
+  if (new Set(busyDays).size >= 7) {
+    return NextResponse.json({ error: "Bạn phải chừa ít nhất 1 ngày rảnh trong tuần" }, { status: 400 });
+  }
 
   try {
     await updateBusyDays(session.user.id, id, busyDays);
