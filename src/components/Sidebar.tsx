@@ -17,6 +17,8 @@ import {
   UsersRound,
   GraduationCap,
   Database,
+  Layers,
+  TrendingUp,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -27,6 +29,8 @@ const nav = [
   { href: "/roadmap", label: "Lộ trình", icon: Map },
   { href: "/lessons", label: "Bài học", icon: BookOpen },
   { href: "/review", label: "Ôn tập", icon: GraduationCap },
+  { href: "/vocabulary", label: "Sổ từ vựng", icon: Layers },
+  { href: "/progress", label: "Tiến độ", icon: TrendingUp },
   { href: "/friends", label: "Bạn bè", icon: Users },
   { href: "/study-groups", label: "Nhóm học", icon: UsersRound },
   { href: "/profile", label: "Hồ sơ", icon: User },

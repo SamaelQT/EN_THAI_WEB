@@ -246,6 +246,7 @@ export default function CalendarView({ lessonDays, onStartLesson }: Props) {
           <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm bg-green-100 border border-green-300" /> Đã học</div>
           <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-200" /> Tiếng Anh</div>
           <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-200" /> Tiếng Thái</div>
+          <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm bg-violet-100 border border-violet-200" /> Tiếng Hàn</div>
           <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300" /> Bị bỏ lỡ</div>
         </div>
       </div>

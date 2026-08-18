@@ -12,6 +12,8 @@ import { Loader2, BookOpen, Timer, RotateCcw, ChevronRight, Clock, Bookmark, Boo
 type Question = {
   id: string; order: number; question: string;
   options: string[]; answer: number; explanation: string | null;
+  /** Parallel to options: why each wrong option is wrong ("" at the correct index) */
+  whyWrong?: string[];
 };
 type ReviewSet = {
   id: string; language: string; type: string; topic: string;
@@ -304,12 +306,8 @@ export default function ReviewClient({ initialSets, userId }: Props) {
       return;
     }
 
-    // Other types: check cache first
-    const cached = sets.find(
-      (s) => s.language === lang && s.type === selectedType && s.topic === topic && s.level === selectedLevel
-    );
-    if (cached) { await startQuiz(cached); return; }
-
+    // Other types: always ask the server — it rotates between several question-set
+    // variants so retaking a review doesn't hand back the identical paper.
     setGenerating(true);
     const set = await callReviewAPI(topic);
     setGenerating(false);
@@ -342,9 +340,31 @@ export default function ReviewClient({ initialSets, userId }: Props) {
     setAnswers(newAnswers); setSelected(null);
     if (current + 1 < questions.length) {
       setCurrent(current + 1); startTimer();
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-      setScreen("result");
+      return;
+    }
+    if (timerRef.current) clearInterval(timerRef.current);
+    setScreen("result");
+
+    // Log every answer so the weakness report and review queue can learn from it
+    if (activeSet) {
+      void fetch("/api/quiz-attempts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          language: activeSet.language,
+          source: "review",
+          level: activeSet.level,
+          topic: activeSet.topic,
+          lessonId: activeSet.id,
+          attempts: questions.map((qq, i) => ({
+            question: qq.question,
+            options: qq.options,
+            correctAnswer: qq.answer,
+            chosenAnswer: newAnswers[i] ?? -1,
+            explanation: qq.explanation ?? null,
+          })),
+        }),
+      }).catch(() => { /* best-effort */ });
     }
   }
 
@@ -405,17 +425,34 @@ export default function ReviewClient({ initialSets, userId }: Props) {
             </div>
 
             {selected !== null && (
-              <div className={`mt-4 p-3 rounded-lg text-sm ${
-                selected === q.answer
-                  ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
-                  : "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
-              }`}>
-                <p className="font-medium">
+              <div className="mt-4 space-y-2">
+                <div className={`p-3 rounded-lg text-sm font-medium ${
+                  selected === q.answer
+                    ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300"
+                    : "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
+                }`}>
                   {selected === q.answer
                     ? "✓ Chính xác!"
                     : `✗ Đáp án đúng: ${String.fromCharCode(65 + q.answer)}. ${q.options[q.answer]}`}
-                </p>
-                {q.explanation && <p className="mt-1 text-xs opacity-80">{q.explanation}</p>}
+                </div>
+
+                {selected !== q.answer && q.whyWrong?.[selected] && (
+                  <div className="p-3 rounded-lg border border-red-200 dark:border-red-900 text-sm">
+                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">
+                      Vì sao "{q.options[selected]}" sai
+                    </p>
+                    <p className="leading-relaxed">{q.whyWrong[selected]}</p>
+                  </div>
+                )}
+
+                {q.explanation && (
+                  <div className="p-3 rounded-lg border border-green-200 dark:border-green-900 text-sm">
+                    <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">
+                      Vì sao đáp án đúng là "{q.options[q.answer]}"
+                    </p>
+                    <p className="leading-relaxed">{q.explanation}</p>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -461,6 +498,46 @@ export default function ReviewClient({ initialSets, userId }: Props) {
             </div>
           </CardContent>
         </Card>
+        {/* ── Wrong-answer review with full reasoning ── */}
+        {(() => {
+          const missed = questions
+            .map((qq, i) => ({ qq, picked: answers[i] }))
+            .filter(({ qq, picked }) => picked !== qq.answer);
+          if (missed.length === 0) return null;
+          return (
+            <div className="text-left space-y-2">
+              <p className="text-sm font-semibold text-muted-foreground">Xem lại {missed.length} câu chưa đúng</p>
+              {missed.map(({ qq, picked }, i) => (
+                <Card key={i} className="border-red-200 dark:border-red-900">
+                  <CardContent className="pt-4 pb-4 space-y-3">
+                    <p className="text-sm font-medium leading-relaxed">{qq.question}</p>
+                    <div className="space-y-2 text-xs">
+                      <div className="rounded-md bg-red-50 dark:bg-red-950/40 px-3 py-2">
+                        <p className="text-red-700 dark:text-red-400 font-medium">
+                          Bạn chọn: {picked === null || picked === undefined
+                            ? "(bỏ qua)"
+                            : <span className="line-through">{qq.options[picked]}</span>}
+                        </p>
+                        {picked !== null && picked !== undefined && qq.whyWrong?.[picked] && (
+                          <p className="mt-1 leading-relaxed text-foreground/80">{qq.whyWrong[picked]}</p>
+                        )}
+                      </div>
+                      <div className="rounded-md bg-green-50 dark:bg-green-950/40 px-3 py-2">
+                        <p className="text-green-800 dark:text-green-400 font-medium">
+                          Đáp án đúng: {qq.options[qq.answer]}
+                        </p>
+                        {qq.explanation && (
+                          <p className="mt-1 leading-relaxed text-foreground/80">{qq.explanation}</p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          );
+        })()}
+
         <div className="flex gap-3 justify-center flex-wrap">
           <Button variant="outline" onClick={() => { setScreen("browse"); resetFilters(); }}>Về trang chủ</Button>
           <Button variant="outline" onClick={() => alreadySaved ? unsaveEntry(activeSet.id) : saveEntry(activeSet)}>

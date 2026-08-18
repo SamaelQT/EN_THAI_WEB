@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Loader2, PlayCircle, BookOpen, Volume2, Mic, Square } from "lucide-react";
 import CalendarView, { type LessonDay } from "./CalendarView";
 import { CEFR_WEEK_THEMES, TOEIC_WEEK_THEMES, IELTS_WEEK_THEMES, THAI_WEEK_THEMES, KOREAN_WEEK_THEMES, type Level } from "@/lib/roadmap-generator";
+import { scorePronunciation, type PronunciationResult } from "@/lib/pronunciation";
 
 // Built-in lesson content for the MVP (expandable via AI later)
 const LESSON_CONTENT: Record<string, any> = {
@@ -185,12 +186,22 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
   const [convMessages, setConvMessages] = useState<ConvMessage[]>([]);
   const [convLoading, setConvLoading] = useState(false);
   const [convListening, setConvListening] = useState(false);
+  // Live transcript shown while the learner is still speaking.
+  // `convFinal` mirrors the ref so React actually re-renders as words land.
+  const [convInterim, setConvInterim] = useState("");
+  const [convFinal, setConvFinal] = useState("");
+  const convRecognitionRef = useRef<any>(null);
+  const convTranscriptRef = useRef<string>("");
+  /** true once the learner presses stop — tells onend not to auto-resume */
+  const convStopWantedRef = useRef(false);
   const [convLevel, setConvLevel] = useState<string>("");
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState<string>("");
   // Listening lesson voice state
   // Up to 4 speaker voices (index 0-3)
   const [listeningVoices, setListeningVoices] = useState<string[]>(["", "", "", ""]);
+  // Speaking lesson: the voice used for the "nghe mẫu" button on each phrase
+  const [speakingVoiceURI, setSpeakingVoiceURI] = useState<string>("");
   const [playingLineIdx, setPlayingLineIdx] = useState<number>(-1);
 
   useEffect(() => {
@@ -243,6 +254,11 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
   const [quizAnswers, setQuizAnswers] = useState<number[]>([]);
   const [quizSelected, setQuizSelected] = useState<number | null>(null);
   const [quizScore, setQuizScore] = useState(0);
+  // Snapshot of the finished quiz so the result screen can show what went wrong
+  const [quizReview, setQuizReview] = useState<{
+    q: string; options: string[]; answer: number; picked: number;
+    explanation?: string; whyWrong?: string[];
+  }[]>([]);
 
   // Writing lesson state
   const [writingText, setWritingText] = useState("");
@@ -269,7 +285,15 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   // B3 – Speaking mic
   const [micPhraseIdx, setMicPhraseIdx] = useState<number | null>(null);
-  const [micResults, setMicResults] = useState<Record<number, { transcript: string; score: number }>>({});
+  const [micResults, setMicResults] = useState<Record<number, { transcript: string; result: PronunciationResult }>>({});
+  // Live partial transcript while recording a phrase
+  const [micInterim, setMicInterim] = useState("");
+  const micTranscriptRef = useRef<string>("");
+  /** true once the learner presses stop — tells onend not to auto-resume */
+  const micStopWantedRef = useRef(false);
+  // Saving lesson words into the personal notebook
+  const [savingWords, setSavingWords] = useState(false);
+  const [wordsSaved, setWordsSaved] = useState(false);
 
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const recognitionRef = useRef<any>(null);
@@ -293,6 +317,12 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(word);
     utt.lang = getTTSLang();
+    // Use the voice the learner picked for this lesson; fall back to any voice of the target language
+    const voices = window.speechSynthesis.getVoices();
+    const picked =
+      voices.find((v) => v.voiceURI === speakingVoiceURI) ??
+      voices.find((v) => v.lang.startsWith(getTTSLang().slice(0, 2)));
+    if (picked) utt.voice = picked;
     utt.onstart = () => setSpeakingIdx(idx);
     utt.onend = () => setSpeakingIdx(null);
     utt.onerror = () => setSpeakingIdx(null);
@@ -398,6 +428,12 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
     setAudioRevealed(true);
   }
 
+  /**
+   * Record one attempt at a phrase.
+   *
+   * Continuous mode + accumulating final chunks, so a learner reading a long sentence
+   * isn't cut off at their first breath. The learner presses stop when they're done.
+   */
   function startMic(phraseIdx: number, phraseText: string) {
     const SR =
       typeof window !== "undefined" &&
@@ -406,48 +442,75 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
       toast.error("Trình duyệt không hỗ trợ nhận giọng nói. Dùng Chrome hoặc Edge.");
       return;
     }
-    if (recognitionRef.current) recognitionRef.current.abort();
-    const rec = new SR();
-    rec.lang = getTTSLang();
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    recognitionRef.current = rec;
+    if (recognitionRef.current) {
+      micStopWantedRef.current = true;
+      recognitionRef.current.abort();
+    }
+
+    micTranscriptRef.current = "";
+    micStopWantedRef.current = false;
+    setMicInterim("");
     setMicPhraseIdx(phraseIdx);
 
-    let gotResult = false;
+    const spin = () => {
+      const rec = new SR();
+      rec.lang = getTTSLang();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+      recognitionRef.current = rec;
 
-    rec.onresult = (e: any) => {
-      gotResult = true;
-      const spoken = e.results[0][0].transcript as string;
-      const score = matchScore(spoken, phraseText);
-      setMicResults((prev) => ({ ...prev, [phraseIdx]: { transcript: spoken, score } }));
-      setMicPhraseIdx(null);
+      rec.onresult = (e: any) => {
+        let interim = "";
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const chunk = e.results[i][0].transcript as string;
+          if (e.results[i].isFinal) micTranscriptRef.current += chunk + " ";
+          else interim += chunk;
+        }
+        setMicInterim(interim);
+      };
+
+      rec.onerror = (e: any) => {
+        if (e.error === "no-speech" || e.error === "aborted") return; // onend deals with it
+        micStopWantedRef.current = true;
+        if (e.error === "not-allowed") toast.error("Cần cấp quyền microphone cho trang web");
+        else if (e.error === "network") toast.error("Lỗi mạng, kiểm tra kết nối");
+        else toast.error(`Lỗi nhận giọng nói: ${e.error}`);
+      };
+
+      rec.onend = () => {
+        // Silence ended the session but the learner hasn't pressed stop → keep listening
+        if (!micStopWantedRef.current) {
+          try { rec.start(); return; } catch { /* fall through */ }
+        }
+        recognitionRef.current = null;
+        setMicPhraseIdx(null);
+        setMicInterim("");
+
+        const spoken = micTranscriptRef.current.trim();
+        micTranscriptRef.current = "";
+        if (!spoken) {
+          toast.info("Không nhận được giọng nói — thử nói to và rõ hơn");
+          return;
+        }
+        const result = scorePronunciation(spoken, phraseText);
+        setMicResults((prev) => ({ ...prev, [phraseIdx]: { transcript: spoken, result } }));
+      };
+
+      rec.start();
     };
-    rec.onerror = (e: any) => {
-      setMicPhraseIdx(null);
-      if (e.error === "not-allowed") toast.error("Cần cấp quyền microphone cho trang web");
-      else if (e.error === "no-speech") toast.info("Không nghe thấy giọng nói, nói to hơn và thử lại");
-      else if (e.error === "network") toast.error("Lỗi mạng, kiểm tra kết nối");
-      else toast.error(`Lỗi nhận giọng nói: ${e.error}`);
-    };
-    rec.onend = () => {
-      setMicPhraseIdx(null);
-      if (!gotResult) toast.info("Không nhận được giọng nói — thử nói to và rõ hơn");
-    };
-    rec.start();
+
+    spin();
   }
 
   function stopMic() {
-    recognitionRef.current?.stop();
-    recognitionRef.current = null;
-    setMicPhraseIdx(null);
-  }
-
-  function matchScore(spoken: string, target: string): number {
-    const spokenWords = spoken.toLowerCase().trim().split(/\s+/);
-    const targetWords = target.toLowerCase().trim().split(/\s+/).filter(Boolean);
-    if (targetWords.length === 0) return 0;
-    return targetWords.filter((w) => spokenWords.includes(w)).length / targetWords.length;
+    micStopWantedRef.current = true;
+    const rec = recognitionRef.current;
+    if (rec) {
+      try { rec.stop(); } catch { /* already stopped */ }
+    } else {
+      setMicPhraseIdx(null);
+    }
   }
 
   function stopAll() {
@@ -473,6 +536,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
     setActiveLessonLevel(level);
     setLessonContentHidden(false);
     setListeningVoices(["", "", "", ""]);
+    setSpeakingVoiceURI("");
     // reset speech state
     setAudioRevealed(false);
     setIsPlayingAudio(false);
@@ -482,6 +546,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
     // reset writing state
     setWritingText("");
     setWritingFeedback(null);
+    setWordsSaved(false);
     stopAll();
 
     if (cached) {
@@ -512,6 +577,11 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
         setLessonState("browse");
         return;
       }
+      // Groq went down mid-generation and a backup provider answered. Say so — a silent
+      // fallback would hide an outage that still needs fixing.
+      if (data._aiFellBack) {
+        toast.warning(`Groq đang lỗi — bài này do ${data._aiProvider} tạo. Xem /api/ai-health?probe=1`, { duration: 8000 });
+      }
       LESSON_CONTENT[key] = data;
       setActiveLesson(data);
       setLessonState("learning");
@@ -527,9 +597,16 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
   }
 
   function startQuiz() {
+    if (!activeLesson?.quiz?.length) {
+      toast.error("Bài học này chưa có câu hỏi. Thử tạo lại bài học.");
+      return;
+    }
     setLessonState("quiz");
     setQuizIndex(0);
     setQuizSelected(null);
+    setQuizAnswers([]);
+    setQuizScore(0);
+    setQuizReview([]);
     stopAll();
   }
 
@@ -550,7 +627,42 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
 
     if (quizIndex + 1 < currentQuiz.length) {
       setQuizIndex(quizIndex + 1);
-    } else if (isCheckpointQuiz) {
+      return;
+    }
+
+    // Finished — snapshot every question with what the learner picked
+    const reviewSnapshot = currentQuiz.map((item: any, i: number) => ({
+      q: item.q,
+      options: item.options,
+      answer: item.answer,
+      picked: newAnswers[i],
+      explanation: item.explanation,
+      whyWrong: item.whyWrong,
+    }));
+    setQuizReview(reviewSnapshot);
+
+    // Persist every answer so the weakness report and the review queue can use it
+    void fetch("/api/quiz-attempts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        language: activeLessonLang,
+        source: isCheckpointQuiz ? "checkpoint" : "lesson",
+        lessonType: activeLessonType,
+        level: activeLessonLevel,
+        topic: activeLesson?.title ?? null,
+        lessonId: activeDayId ? `day_${activeDayId}` : activeLessonKey,
+        attempts: reviewSnapshot.map((r: any) => ({
+          question: r.q,
+          options: r.options,
+          correctAnswer: r.answer,
+          chosenAnswer: r.picked ?? -1,
+          explanation: r.explanation ?? null,
+        })),
+      }),
+    }).catch(() => { /* logging is best-effort — never block the learner */ });
+
+    if (isCheckpointQuiz) {
       const pct = Math.round((newScore / currentQuiz.length) * 100);
       setQuizScore(pct);
       setIsCheckpointQuiz(false);
@@ -560,6 +672,43 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
       toast.success(`Kiểm tra tổng hợp: ${pct}% · ${pct >= 70 ? "Xuất sắc! 🎉" : "Cố gắng thêm! 💪"}`, { duration: 5000 });
     } else {
       finishLesson(newScore, currentQuiz.length);
+    }
+  }
+
+  /** Push this lesson's word list into the learner's spaced-repetition notebook. */
+  async function saveWordsToNotebook() {
+    const words = activeLesson?.words;
+    if (!Array.isArray(words) || words.length === 0) return;
+    setSavingWords(true);
+    try {
+      const res = await fetch("/api/vocabulary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          language: activeLessonLang,
+          words: words.map((w: any) => ({
+            word: w.word,
+            phonetic: w.phonetic,
+            meaning: w.meaning,
+            example: w.example,
+            exampleVi: w.example_vi,
+            sourceType: "lesson",
+            sourceId: activeLessonKey,
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setWordsSaved(true);
+      toast.success(
+        data.added > 0
+          ? `Đã lưu ${data.added} từ vào sổ${data.skipped > 0 ? ` (${data.skipped} từ đã có sẵn)` : ""}`
+          : "Tất cả từ trong bài đã có trong sổ rồi"
+      );
+    } catch {
+      toast.error("Không lưu được từ vựng. Thử lại sau.");
+    } finally {
+      setSavingWords(false);
     }
   }
 
@@ -580,6 +729,10 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
         }),
       });
       const data = await res.json();
+      if (!res.ok || data.error || typeof data.score !== "number") {
+        toast.error(data.error ?? "Không thể nhận xét bài viết. Thử lại sau.");
+        return;
+      }
       setWritingFeedback(data);
     } catch {
       toast.error("Không thể nhận xét bài viết. Thử lại sau.");
@@ -598,12 +751,16 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
       });
       const data = await res.json();
       if (!data.quiz?.length) throw new Error("no quiz");
+      if (data._aiFellBack) {
+        toast.warning(`Groq đang lỗi — bài kiểm tra do ${data._aiProvider} tạo`, { duration: 6000 });
+      }
       setCheckpointQuiz(data.quiz);
       setIsCheckpointQuiz(true);
       setQuizIndex(0);
       setQuizSelected(null);
       setQuizScore(0);
       setQuizAnswers([]);
+      setQuizReview([]);
       setLessonState("quiz");
     } catch {
       toast.error("Không thể tạo bài kiểm tra tổng hợp. Thử lại sau.");
@@ -633,6 +790,10 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
         }),
       });
       const data = await res.json();
+      if (!res.ok || data.error) {
+        toast.error(data.error ?? "Không lưu được kết quả.");
+        return;
+      }
       const xp = data.xpGained ?? (score >= 70 ? 15 : 8);
       toast.success(`Hoàn thành! ${score}% · +${xp} XP · 🔥 ${data.newStreak} ngày`);
       if (data.weekAdvanced) {
@@ -900,7 +1061,8 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
   // ── Conversation screen ───────────────────────────────────────
   if (lessonState === "conversation") {
     const scenario = SCENARIOS.find((s) => s.id === convScenario);
-    const ttsLang = lang === "thai" ? "th-TH" : "en-US";
+    const ttsLang = lang === "thai" ? "th-TH" : lang === "korean" ? "ko-KR" : "en-US";
+    const langLabel = lang === "english" ? "Tiếng Anh" : lang === "korean" ? "Tiếng Hàn" : "Tiếng Thái";
 
     function extractSpeakPart(reply: string): string {
       const cut = reply.search(/💡|Góp ý|Nhận xét|Lưu ý:/);
@@ -930,6 +1092,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
           body: JSON.stringify({ messages: newMessages, language: lang, scenario: convScenario, level: convLevel }),
         });
         const data = await res.json();
+        if (data._aiFellBack) {
+          toast.warning(`Groq đang lỗi — đang dùng ${data._aiProvider} thay thế`, { duration: 6000 });
+        }
         if (data.reply) {
           const aiMsg: ConvMessage = { role: "assistant", content: data.reply };
           setConvMessages([...newMessages, aiMsg]);
@@ -942,29 +1107,86 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
       }
     }
 
+    /**
+     * Press-to-talk.
+     *
+     * The old version used the default one-shot mode: the recogniser stopped at the first
+     * pause and sent whatever it had, cutting people off mid-sentence. Now it runs in
+     * continuous mode, accumulates every final chunk, and only sends when the learner
+     * presses stop — Chrome still ends the session on long silence, so `restartWanted`
+     * transparently starts it again while the learner is still holding the floor.
+     */
     function startListening() {
       const SR = typeof window !== "undefined" && ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
       if (!SR) { toast.error("Trình duyệt không hỗ trợ. Dùng Chrome hoặc Edge."); return; }
       window.speechSynthesis.cancel();
-      const rec = new SR();
-      rec.lang = ttsLang;
-      rec.interimResults = false;
+
+      convTranscriptRef.current = "";
+      convStopWantedRef.current = false;
+      setConvInterim("");
+      setConvFinal("");
+
+      function spin() {
+        const rec = new SR();
+        rec.lang = ttsLang;
+        rec.continuous = true;      // don't stop at the first pause
+        rec.interimResults = true;  // show what's being heard as it comes
+        convRecognitionRef.current = rec;
+
+        rec.onresult = (e: any) => {
+          let interim = "";
+          let gotFinal = false;
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const chunk = e.results[i][0].transcript as string;
+            if (e.results[i].isFinal) { convTranscriptRef.current += chunk + " "; gotFinal = true; }
+            else interim += chunk;
+          }
+          setConvInterim(interim);
+          if (gotFinal) setConvFinal(convTranscriptRef.current);
+        };
+
+        rec.onerror = (e: any) => {
+          if (e.error === "no-speech" || e.error === "aborted") return; // handled in onend
+          convStopWantedRef.current = true;
+          setConvListening(false);
+          setConvInterim("");
+          if (e.error === "not-allowed") toast.error("Cần cấp quyền microphone");
+          else if (e.error === "network") toast.error("Lỗi mạng khi nhận giọng nói");
+          else toast.error("Lỗi nhận giọng nói");
+        };
+
+        rec.onend = () => {
+          // Browser ended the session on silence but the learner hasn't pressed stop → resume
+          if (!convStopWantedRef.current) {
+            try { rec.start(); return; } catch { /* fall through to finish */ }
+          }
+          convRecognitionRef.current = null;
+          setConvListening(false);
+          setConvInterim("");
+          setConvFinal("");
+
+          const text = convTranscriptRef.current.trim();
+          convTranscriptRef.current = "";
+          if (text) sendMessage(text);
+          else toast.info("Không nghe thấy giọng nói, thử lại");
+        };
+
+        rec.start();
+      }
+
       setConvListening(true);
-      let got = false;
-      rec.onresult = (e: any) => {
-        got = true;
-        sendMessage(e.results[0][0].transcript as string);
-      };
-      rec.onerror = (e: any) => {
+      spin();
+    }
+
+    /** Stop listening and send everything captured so far. */
+    function stopListening() {
+      convStopWantedRef.current = true;
+      const rec = convRecognitionRef.current;
+      if (rec) {
+        try { rec.stop(); } catch { /* already stopped */ }
+      } else {
         setConvListening(false);
-        if (e.error === "not-allowed") toast.error("Cần cấp quyền microphone");
-        else toast.error("Lỗi nhận giọng nói");
-      };
-      rec.onend = () => {
-        setConvListening(false);
-        if (!got) toast.info("Không nghe thấy giọng nói, thử lại");
-      };
-      rec.start();
+      }
     }
 
     function endConversation() {
@@ -981,7 +1203,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
             <span className="text-lg">{scenario?.icon}</span>
             <div>
               <p className="font-semibold text-sm">{scenario?.label}</p>
-              <p className="text-xs text-muted-foreground">{lang === "english" ? "Tiếng Anh" : "Tiếng Thái"} · {convLevel}</p>
+              <p className="text-xs text-muted-foreground">{langLabel} · {convLevel}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1045,24 +1267,43 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
           )}
         </div>
 
-        {/* Mic button */}
-        <div className="pt-3 border-t shrink-0 flex justify-center">
-          <button
-            onClick={startListening}
-            disabled={convLoading || convListening}
-            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg ${
-              convListening
-                ? "bg-red-500 text-white scale-110 animate-pulse"
+        {/* Mic — press once to start, press again when you've finished the sentence */}
+        <div className="pt-3 border-t shrink-0 space-y-2">
+          {convListening && (
+            <div className="rounded-lg bg-muted/50 px-3 py-2 min-h-[2.5rem]">
+              <p className="text-sm">
+                {convFinal}
+                <span className="text-muted-foreground italic">{convInterim}</span>
+                {!convFinal && !convInterim && (
+                  <span className="text-muted-foreground">Đang nghe, cứ nói hết câu rồi bấm Gửi...</span>
+                )}
+              </p>
+            </div>
+          )}
+
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={convListening ? stopListening : startListening}
+              disabled={convLoading}
+              className={`w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg ${
+                convListening
+                  ? "bg-red-500 text-white scale-110"
+                  : convLoading
+                  ? "bg-muted text-muted-foreground cursor-not-allowed"
+                  : "bg-primary text-primary-foreground hover:scale-105"
+              }`}
+              aria-label={convListening ? "Nói xong, gửi" : "Bấm để nói"}
+            >
+              {convListening ? <Square size={24} /> : <Mic size={24} />}
+            </button>
+            <p className="text-xs text-muted-foreground">
+              {convListening
+                ? "Nói thoải mái — bấm lại để gửi"
                 : convLoading
-                ? "bg-muted text-muted-foreground cursor-not-allowed"
-                : "bg-primary text-primary-foreground hover:scale-105"
-            }`}
-          >
-            {convListening ? <Square size={24} /> : <Mic size={24} />}
-          </button>
-          <p className="absolute mt-20 text-xs text-muted-foreground">
-            {convListening ? "Đang nghe..." : convLoading ? "AI đang trả lời..." : "Bấm để nói"}
-          </p>
+                ? "AI đang trả lời..."
+                : "Bấm để nói"}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -1133,6 +1374,20 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
     const currentQuiz = isCheckpointQuiz && checkpointQuiz ? checkpointQuiz : activeLesson?.quiz ?? [];
     const q = currentQuiz[quizIndex];
 
+    // Malformed / empty quiz → show a way out instead of crashing on q.q
+    if (!q || !Array.isArray(q.options) || q.options.length === 0) {
+      return (
+        <div className="max-w-md mx-auto text-center space-y-4 py-16">
+          <div className="text-4xl">😕</div>
+          <p className="font-medium">Bài kiểm tra này bị lỗi dữ liệu.</p>
+          <p className="text-sm text-muted-foreground">Quay lại và mở bài học để hệ thống tạo lại câu hỏi.</p>
+          <Button onClick={() => { setIsCheckpointQuiz(false); setCheckpointQuiz(null); setLessonState("list"); }}>
+            Quay lại danh sách bài học
+          </Button>
+        </div>
+      );
+    }
+
     // Strip leading letter/number labels the AI sometimes embeds: "A) text", "A. text", "1) text"
     function cleanOption(opt: string): string {
       return opt.replace(/^[A-Da-d1-4][.)]\s*/u, "").trim();
@@ -1163,16 +1418,45 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                   cls += "hover:bg-muted cursor-pointer";
                 }
                 return (
-                  <div key={i} className={cls} onClick={() => answerQuiz(i)}>
+                  <button
+                    key={i}
+                    type="button"
+                    className={cls}
+                    onClick={() => answerQuiz(i)}
+                    disabled={quizSelected !== null}
+                    aria-label={`Phương án ${label}: ${text}`}
+                  >
                     <span className="mr-3 font-bold text-muted-foreground">{label}.</span>
                     {text}
-                  </div>
+                  </button>
                 );
               })}
             </div>
             {quizSelected !== null && (
-              <div className={`mt-4 p-3 rounded-lg text-sm ${quizSelected === q.answer ? "bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300" : "bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300"}`}>
-                {quizSelected === q.answer ? "✓ Chính xác!" : `✗ Đáp án đúng: ${cleanOption(q.options[q.answer])}`}
+              <div className="mt-4 space-y-2">
+                <div className={`p-3 rounded-lg text-sm ${quizSelected === q.answer ? "bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300" : "bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300"}`}>
+                  {quizSelected === q.answer ? "✓ Chính xác!" : `✗ Đáp án đúng: ${cleanOption(q.options[q.answer])}`}
+                </div>
+
+                {/* Why the option the learner picked is wrong */}
+                {quizSelected !== q.answer && q.whyWrong?.[quizSelected] && (
+                  <div className="p-3 rounded-lg border border-red-200 dark:border-red-900 bg-background text-sm">
+                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 mb-1">
+                      Vì sao "{cleanOption(q.options[quizSelected])}" sai
+                    </p>
+                    <p className="leading-relaxed">{q.whyWrong[quizSelected]}</p>
+                  </div>
+                )}
+
+                {/* Why the correct answer is correct */}
+                {q.explanation && (
+                  <div className="p-3 rounded-lg border border-green-200 dark:border-green-900 bg-background text-sm">
+                    <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">
+                      Vì sao đáp án đúng là "{cleanOption(q.options[q.answer])}"
+                    </p>
+                    <p className="leading-relaxed">{q.explanation}</p>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -1203,6 +1487,74 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
           </CardContent>
         </Card>
 
+        {/* ── Wrong-answer review — the part that actually teaches ── */}
+        {(() => {
+          const wrong = quizReview.filter((r) => r.picked !== r.answer);
+          if (quizReview.length === 0) return null;
+          if (wrong.length === 0) {
+            return (
+              <div className="rounded-lg border bg-green-50 dark:bg-green-950/30 px-4 py-3 text-sm text-green-800 dark:text-green-300">
+                ✓ Bạn trả lời đúng toàn bộ {quizReview.length} câu.
+              </div>
+            );
+          }
+          return (
+            <div className="text-left space-y-2">
+              <p className="text-sm font-semibold text-muted-foreground">
+                Xem lại {wrong.length} câu sai
+              </p>
+              <div className="space-y-2">
+                {wrong.map((r, i) => (
+                  <Card key={i} className="border-red-200 dark:border-red-900">
+                    <CardContent className="pt-4 pb-4 space-y-3">
+                      <p className="text-sm font-medium leading-relaxed">{r.q}</p>
+
+                      <div className="space-y-2 text-xs">
+                        <div className="rounded-md bg-red-50 dark:bg-red-950/40 px-3 py-2">
+                          <p className="text-red-700 dark:text-red-400 font-medium">
+                            Bạn chọn: <span className="line-through">{r.options[r.picked] ?? "(bỏ qua)"}</span>
+                          </p>
+                          {r.whyWrong?.[r.picked] && (
+                            <p className="mt-1 leading-relaxed text-foreground/80">{r.whyWrong[r.picked]}</p>
+                          )}
+                        </div>
+
+                        <div className="rounded-md bg-green-50 dark:bg-green-950/40 px-3 py-2">
+                          <p className="text-green-800 dark:text-green-400 font-medium">
+                            Đáp án đúng: {r.options[r.answer]}
+                          </p>
+                          {r.explanation && (
+                            <p className="mt-1 leading-relaxed text-foreground/80">{r.explanation}</p>
+                          )}
+                        </div>
+
+                        {/* The remaining distractors, so the whole question is understood */}
+                        {r.whyWrong && r.options.some((_, oi) => oi !== r.answer && oi !== r.picked && r.whyWrong?.[oi]) && (
+                          <details className="rounded-md border px-3 py-2">
+                            <summary className="cursor-pointer text-muted-foreground select-none">
+                              Các phương án còn lại
+                            </summary>
+                            <div className="mt-2 space-y-1.5">
+                              {r.options.map((opt, oi) =>
+                                oi !== r.answer && oi !== r.picked && r.whyWrong?.[oi] ? (
+                                  <p key={oi} className="leading-relaxed">
+                                    <span className="font-medium">{opt}</span>
+                                    <span className="text-muted-foreground"> — {r.whyWrong[oi]}</span>
+                                  </p>
+                                ) : null
+                              )}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Checkpoint quiz CTA after completing day 5 */}
         {checkpointReady && (
           <div className="rounded-lg border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-4 text-left space-y-3">
@@ -1226,7 +1578,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
               {isLoadingCheckpoint ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Đang tạo bài kiểm tra...</>
               ) : (
-                "Bắt đầu kiểm tra tổng hợp (10 câu) →"
+                "Bắt đầu kiểm tra tổng hợp →"
               )}
             </Button>
           </div>
@@ -1299,6 +1651,20 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
         {/* B1 – Vocabulary with TTS buttons */}
         {!lessonContentHidden && activeLesson.words && (
           <div className="grid gap-4">
+            <Button
+              variant={wordsSaved ? "outline" : "default"}
+              size="sm"
+              onClick={saveWordsToNotebook}
+              disabled={savingWords || wordsSaved}
+              className="gap-2 w-full"
+            >
+              {savingWords
+                ? <><Loader2 size={14} className="animate-spin" />Đang lưu...</>
+                : wordsSaved
+                  ? <>✓ Đã lưu vào sổ từ</>
+                  : <><BookOpen size={14} />Lưu {activeLesson.words.length} từ vào sổ từ (ôn lặp ngắt quãng)</>}
+            </Button>
+
             {activeLesson.words.map((w: any, i: number) => (
               <Card key={i}>
                 <CardContent className="pt-4 pb-4">
@@ -1463,6 +1829,14 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
           const isDialogue = speakers.length >= 2;
           const langVoices = availableVoices.filter((v) => v.lang.startsWith(getTTSLang().slice(0, 2)));
           const SPEAKER_COLORS = ["bg-blue-500", "bg-rose-500", "bg-emerald-500", "bg-amber-500"];
+          // Learner must assign a voice to every speaker before the audio can play.
+          // (If the browser ships no voice for this language we can't ask them to — play with the default.)
+          const activeSpeakers = isDialogue ? speakers.slice(0, 4) : speakers.slice(0, 1);
+          const voicesReady =
+            langVoices.length === 0 ||
+            activeSpeakers.length === 0 ||
+            activeSpeakers.every((_, i) => (listeningVoices[i] ?? "") !== "");
+          const langName = activeLessonLang === "korean" ? "tiếng Hàn" : activeLessonLang === "thai" ? "tiếng Thái" : "tiếng Anh";
 
           return (
             <Card>
@@ -1471,28 +1845,25 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
               </CardHeader>
               <CardContent className="space-y-4">
 
-                {/* ── Voice selectors — always visible ── */}
-                {langVoices.length > 0 && (() => {
-                  // Auto-assign distinct default voices on first render (spread available voices across speakers)
-                  const activeSpeakers = isDialogue ? speakers.slice(0, 4) : speakers.slice(0, 1);
-                  const allUnset = listeningVoices.every(v => v === "");
-                  if (allUnset && langVoices.length >= 1 && activeSpeakers.length > 0) {
-                    // Spread available voices: if 3 speakers and 5 voices, assign voices 0,1,2
-                    const defaults = activeSpeakers.map((_, i) => langVoices[i % langVoices.length]?.voiceURI ?? "");
-                    if (defaults.some(d => d !== "")) {
-                      setTimeout(() => setListeningVoices(prev => {
-                        const next = [...prev];
-                        defaults.forEach((v, i) => { if (next[i] === "") next[i] = v; });
-                        return next;
-                      }), 0);
-                    }
-                  }
-
+                {/* ── Voice selectors — the learner picks who speaks before pressing play ── */}
+                {langVoices.length === 0 ? (
+                  <div className="rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/20 p-3">
+                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                      ⚠️ Trình duyệt chưa có giọng đọc {langName}. Bài nghe sẽ dùng giọng mặc định của máy —
+                      cài thêm gói giọng nói {langName} trong Cài đặt hệ thống để nghe chuẩn hơn.
+                    </p>
+                  </div>
+                ) : (() => {
                   return (
                     <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                         Chọn giọng đọc {isDialogue ? `(${activeSpeakers.length} người)` : ""}
                       </p>
+                      {!voicesReady && (
+                        <p className="text-xs text-muted-foreground">
+                          Chọn người nói cho {isDialogue ? "từng nhân vật" : "bài nghe"} trước khi bắt đầu.
+                        </p>
+                      )}
                       {isDialogue ? (
                         <div className={`grid gap-2 ${activeSpeakers.length <= 2 ? "grid-cols-2" : "grid-cols-2 md:grid-cols-4"}`}>
                           {activeSpeakers.map((spk, si) => (
@@ -1513,7 +1884,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                                 disabled={isPlayingAudio}
                                 className="w-full text-xs rounded border bg-background px-2 py-1 disabled:opacity-50"
                               >
-                                <option value="">Giọng mặc định</option>
+                                <option value="">— Chọn giọng —</option>
                                 {langVoices.map((v) => (
                                   <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
                                 ))}
@@ -1528,7 +1899,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                           disabled={isPlayingAudio}
                           className="w-full text-xs rounded border bg-background px-2 py-1 disabled:opacity-50"
                         >
-                          <option value="">Giọng mặc định</option>
+                          <option value="">— Chọn giọng —</option>
                           {langVoices.map((v) => (
                             <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
                           ))}
@@ -1549,9 +1920,12 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                   </div>
                 ) : !audioRevealed ? (
                   <div className="flex flex-col items-center gap-2 py-3">
-                    <Button onClick={playTranscript} size="lg" className="gap-2">
+                    <Button onClick={playTranscript} size="lg" className="gap-2" disabled={!voicesReady}>
                       <PlayCircle size={20} /> Nghe đoạn hội thoại
                     </Button>
+                    {!voicesReady && (
+                      <p className="text-xs text-muted-foreground">Chọn giọng đọc phía trên để bắt đầu</p>
+                    )}
                     {!lessonContentHidden && (
                       <button
                         onClick={() => setAudioRevealed(true)}
@@ -1562,7 +1936,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                     )}
                   </div>
                 ) : (
-                  <Button onClick={playTranscript} size="sm" variant="outline" className="w-full gap-2">
+                  <Button onClick={playTranscript} size="sm" variant="outline" className="w-full gap-2" disabled={!voicesReady}>
                     <PlayCircle size={15} /> Nghe lại
                   </Button>
                 )}
@@ -1772,8 +2146,42 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
         )}
 
         {/* B3 – Speaking lesson with mic */}
-        {!lessonContentHidden && activeLesson.phrases && (
+        {!lessonContentHidden && activeLesson.phrases && (() => {
+          const langVoices = availableVoices.filter((v) => v.lang.startsWith(getTTSLang().slice(0, 2)));
+          const voiceReady = langVoices.length === 0 || speakingVoiceURI !== "";
+          return (
           <div className="space-y-3">
+            {/* ── Voice picker — learner chooses the speaker before hearing the model ── */}
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Chọn giọng đọc mẫu
+              </p>
+              {langVoices.length > 0 ? (
+                <>
+                  <select
+                    value={speakingVoiceURI}
+                    onChange={(e) => setSpeakingVoiceURI(e.target.value)}
+                    className="w-full text-xs rounded border bg-background px-2 py-1.5"
+                  >
+                    <option value="">— Chọn người nói —</option>
+                    {langVoices.map((v) => (
+                      <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>
+                    ))}
+                  </select>
+                  {!voiceReady && (
+                    <p className="text-xs text-muted-foreground">
+                      Hãy chọn giọng đọc trước khi nghe phát âm mẫu.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ Trình duyệt chưa có giọng {activeLessonLang === "korean" ? "tiếng Hàn" : activeLessonLang === "thai" ? "tiếng Thái" : "tiếng Anh"}.
+                  Máy sẽ dùng giọng mặc định — cài thêm gói giọng nói trong Cài đặt hệ thống để nghe chuẩn hơn.
+                </p>
+              )}
+            </div>
+
             <div className="grid gap-3">
               {activeLesson.phrases.map((p: any, i: number) => {
                 const result = micResults[i];
@@ -1794,9 +2202,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                             size="sm"
                             variant="outline"
                             onClick={() => speakWord(p.phrase, i)}
-                            disabled={isSpeakingThis}
+                            disabled={isSpeakingThis || !voiceReady}
                             className="gap-1.5"
-                            title="Nghe phát âm mẫu"
+                            title={voiceReady ? "Nghe phát âm mẫu" : "Chọn giọng đọc trước"}
                           >
                             {isSpeakingThis ? <Loader2 size={14} className="animate-spin" /> : <Volume2 size={14} />}
                           </Button>
@@ -1815,18 +2223,54 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                         </div>
                       </div>
                       {isRecording && (
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                          Đang nghe...
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                            Đang nghe — nói hết câu rồi bấm Dừng
+                          </div>
+                          {micInterim && (
+                            <p className="text-xs text-muted-foreground italic bg-muted/50 rounded px-2 py-1">
+                              {micInterim}
+                            </p>
+                          )}
                         </div>
                       )}
                       {result && (
-                        <div className="bg-muted/50 rounded-lg px-3 py-2 space-y-1">
+                        <div className="bg-muted/50 rounded-lg px-3 py-2.5 space-y-2">
                           <div className="flex items-center gap-2">
-                            <ScoreBadge score={result.score} />
-                            <span className="text-xs text-muted-foreground">{Math.round(result.score * 100)}% khớp</span>
+                            <ScoreBadge score={result.result.score} />
+                            <span className="text-xs text-muted-foreground">
+                              {Math.round(result.result.score * 100)}% khớp
+                            </span>
                           </div>
-                          <p className="text-xs text-muted-foreground">Nhận được: "{result.transcript}"</p>
+
+                          {/* Per-word breakdown — green = chuẩn, vàng = gần đúng, đỏ = sai/thiếu */}
+                          <div className="flex flex-wrap gap-1">
+                            {result.result.words.map((w, wi) => (
+                              <span
+                                key={wi}
+                                title={
+                                  w.verdict === "missing"
+                                    ? "Không nghe thấy từ này"
+                                    : `Máy nghe thành: "${w.heard}"`
+                                }
+                                className={`text-xs px-1.5 py-0.5 rounded ${
+                                  w.verdict === "correct"
+                                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                                    : w.verdict === "close"
+                                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                                    : w.verdict === "missing"
+                                    ? "bg-muted text-muted-foreground line-through"
+                                    : "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"
+                                }`}
+                              >
+                                {w.target}
+                              </span>
+                            ))}
+                          </div>
+
+                          <p className="text-xs">{result.result.summary}</p>
+                          <p className="text-xs text-muted-foreground">Máy nghe được: "{result.transcript}"</p>
                         </div>
                       )}
                     </CardContent>
@@ -1853,7 +2297,8 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
               </Card>
             )}
           </div>
-        )}
+          );
+        })()}
 
         {/* Quiz button – locked for listening until audio revealed */}
         <div className="space-y-1">
@@ -1861,10 +2306,15 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
             onClick={startQuiz}
             size="lg"
             className="w-full"
-            disabled={quizLocked}
+            disabled={quizLocked || !activeLesson.quiz?.length}
           >
             Làm bài kiểm tra nhanh ({activeLesson.quiz?.length ?? 0} câu) →
           </Button>
+          {!activeLesson.quiz?.length && (
+            <p className="text-xs text-center text-muted-foreground">
+              Bài học này chưa có câu hỏi hợp lệ — quay lại và mở lại bài để tạo mới
+            </p>
+          )}
           {quizLocked && (
             <p className="text-xs text-center text-muted-foreground">Nghe xong bài hội thoại trước nhé</p>
           )}
@@ -1904,7 +2354,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
     { type: "conversation", label: "Giao tiếp", icon: "💬", desc: "Hội thoại AI theo tình huống" },
   ];
 
-  const currentStreak = lang === "english" ? enStreak : thStreak;
+  const currentStreak = lang === "english" ? enStreak : lang === "korean" ? krStreak : thStreak;
 
   return (
     <div className="space-y-6">

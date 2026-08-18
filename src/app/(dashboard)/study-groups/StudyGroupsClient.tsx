@@ -512,7 +512,10 @@ export default function StudyGroupsClient({ myGroups: initialGroups, currentUser
                     {g.name.charAt(0)}
                   </div>
                   <span className="truncate flex-1">{g.name}</span>
-                  <span className={cn("text-[10px] font-bold px-1 rounded shrink-0", g.language === "english" ? "bg-blue-500/20 text-blue-600" : "bg-red-500/20 text-red-600")}>
+                  <span className={cn("text-[10px] font-bold px-1 rounded shrink-0",
+                    g.language === "english" ? "bg-blue-500/20 text-blue-600"
+                      : g.language === "korean" ? "bg-violet-500/20 text-violet-600"
+                      : "bg-red-500/20 text-red-600")}>
                     {LANG[g.language] ?? g.language}
                   </span>
                 </button>
@@ -1071,6 +1074,7 @@ function CreateGroupDialog({ open, onClose, onCreated }: {
               <SelectContent>
                 <SelectItem value="english"><span className="text-[10px] font-bold text-white px-1 py-0.5 rounded bg-blue-500">EN</span> Tiếng Anh</SelectItem>
                 <SelectItem value="thai"><span className="text-[10px] font-bold text-white px-1 py-0.5 rounded bg-red-500">TH</span> Tiếng Thái</SelectItem>
+                <SelectItem value="korean"><span className="text-[10px] font-bold text-white px-1 py-0.5 rounded bg-violet-500">KR</span> Tiếng Hàn</SelectItem>
               </SelectContent>
             </Select>
           </div>

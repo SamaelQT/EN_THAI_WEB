@@ -116,12 +116,12 @@ export default function PublicProfileClient({
                 <span className="font-medium">
                   <span
                     className={`text-[10px] font-bold text-white px-1.5 py-0.5 rounded mr-1 ${
-                      s.language === "english" ? "bg-blue-500" : "bg-red-500"
+                      s.language === "english" ? "bg-blue-500" : s.language === "korean" ? "bg-violet-500" : "bg-red-500"
                     }`}
                   >
-                    {s.language === "english" ? "EN" : "TH"}
+                    {s.language === "english" ? "EN" : s.language === "korean" ? "KR" : "TH"}
                   </span>
-                  {s.language === "english" ? "Tiếng Anh" : "Tiếng Thái"}
+                  {s.language === "english" ? "Tiếng Anh" : s.language === "korean" ? "Tiếng Hàn" : "Tiếng Thái"}
                 </span>
                 <div className="flex items-center gap-4 text-sm">
                   <span className="flex items-center gap-1 text-orange-500 font-bold">
