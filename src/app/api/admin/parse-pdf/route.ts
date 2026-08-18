@@ -4,6 +4,7 @@ export const maxDuration = 300; // up to 5 min for large multi-chunk PDFs
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import Groq from "groq-sdk";
+import { MODEL_QUALITY } from "@/lib/ai-models";
 
 export const GRAMMAR_TAXONOMY = [
   "present_simple", "present_continuous", "present_perfect", "present_perfect_continuous",
@@ -20,8 +21,8 @@ export const GRAMMAR_TAXONOMY = [
   "reading_vocabulary_in_context", "listening_comprehension", "other",
 ] as const;
 
-// llama-3.3-70b-versatile: 12 000 TPM (double the 6 000 TPM of 8b-instant)
-const EXTRACTION_MODEL = "llama-3.3-70b-versatile";
+// Shares the central config so a decommissioned model is a one-line fix, not a hunt
+const EXTRACTION_MODEL = MODEL_QUALITY;
 // Each chunk: ~4 000 chars ≈ 1 000 tokens input + 600 system + 1 500 response ≈ 3 100 tokens
 // Base delay between chunks; 429 handler will override with retry-after value
 const CHUNK_SIZE = 4_000;

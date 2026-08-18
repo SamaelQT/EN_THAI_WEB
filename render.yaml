@@ -22,3 +22,30 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: CRON_SECRET
+        generateValue: true  # Bearer token for /api/cron/* — copy into the cron job below
+      # Optional: only needed if this service is ever scaled past 1 instance.
+      # Without it, group chat / group quiz only work within a single instance.
+      # - key: REDIS_URL
+      #   sync: false
+
+  # Hourly trigger for the daily study reminder. Each user is notified at their own
+  # local reminderHour, so this must run every hour rather than once a day.
+  - type: cron
+    name: linguapath-daily-reminder
+    runtime: node
+    plan: free
+    region: oregon
+    schedule: "0 * * * *"
+    buildCommand: "true"
+    startCommand: >-
+      curl -fsS -H "Authorization: Bearer $CRON_SECRET"
+      "$APP_URL/api/cron/daily-reminder"
+    envVars:
+      - key: CRON_SECRET
+        fromService:
+          name: linguapath
+          type: web
+          envVarKey: CRON_SECRET
+      - key: APP_URL
+        sync: false          # e.g. https://linguapath.onrender.com
