@@ -23,6 +23,15 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  // ── Study habits ──
+  dailyGoalXp     Int     @default(30)
+  reminderEnabled Boolean @default(true)
+  /** Hour of day (0-23, learner's local time) to send the daily reminder */
+  reminderHour    Int     @default(20)
+  /** Minutes offset from UTC, e.g. Vietnam = 420 */
+  utcOffsetMin    Int     @default(420)
+  lastReminderAt  DateTime?
+
   accounts             Account[]
   sessions             Session[]
   placementTests       PlacementTest[]
@@ -41,6 +50,80 @@ model User {
   notifications        Notification[]
   quizParticipants     QuizParticipant[]
   quizAnswers          QuizAnswer[]
+  quizAttempts         QuizAttempt[]
+  vocabularyItems      VocabularyItem[]
+  avatar               UserAvatar?
+}
+
+// ─── Avatar ──────────────────────────────────────────────────────────────────
+// Stored in its own collection: a base64 image on User made every session lookup
+// drag megabytes across the wire.
+
+model UserAvatar {
+  id        String   @id @default(cuid()) @map("_id")
+  userId    String   @unique
+  mimeType  String
+  data      String   // base64 payload, no data: prefix
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Per-question attempt log ────────────────────────────────────────────────
+// Feeds the weakness report and the spaced-repetition queue.
+
+model QuizAttempt {
+  id            String   @id @default(cuid()) @map("_id")
+  userId        String
+  language      String
+  /** lesson | checkpoint | review | placement */
+  source        String
+  lessonId      String?
+  lessonType    String?
+  level         String?
+  topic         String?
+  question      String
+  options       String[]
+  correctAnswer Int
+  chosenAnswer  Int      // -1 = bỏ qua
+  isCorrect     Boolean
+  explanation   String?
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, language, createdAt])
+  @@index([userId, isCorrect])
+}
+
+// ─── Personal vocabulary notebook (SM-2 spaced repetition) ───────────────────
+
+model VocabularyItem {
+  id         String    @id @default(cuid()) @map("_id")
+  userId     String
+  language   String
+  word       String
+  phonetic   String?
+  meaning    String
+  example    String?
+  exampleVi  String?
+  sourceType String?   // lesson | manual | wrong_answer
+  sourceId   String?
+
+  // SM-2 state
+  ease        Float    @default(2.5)
+  intervalDay Int      @default(0)
+  repetitions Int      @default(0)
+  lapses      Int      @default(0)
+  dueAt       DateTime @default(now())
+  lastReviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, language, word])
+  @@index([userId, language, dueAt])
 }
 
 model Account {
@@ -367,6 +450,8 @@ model ReviewQuestion {
   options     String[] // 4 lựa chọn
   answer      Int      // index đáp án đúng (0-3)
   explanation String?
+  /** Song song với options: vì sao từng phương án sai ("" ở vị trí đáp án đúng) */
+  whyWrong    String[] @default([])
 
   reviewSet ReviewSet @relation(fields: [reviewSetId], references: [id], onDelete: Cascade)
 }
