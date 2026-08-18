@@ -47,7 +47,13 @@
       "Bash(git -C \"D:\\\\Web\\\\EN_THAI_WEB\\\\.claude\\\\worktrees\\\\agent-adff9d8f8deaedc7e\" diff master --stat)",
       "Bash(git -C \"D:\\\\Web\\\\EN_THAI_WEB\\\\.claude\\\\worktrees\\\\agent-adff9d8f8deaedc7e\" diff master -- src/lib/placement-engine.ts src/lib/roadmap-generator.ts src/services/placement.service.ts src/services/roadmap.service.ts)",
       "Bash(git -C \"D:\\\\Web\\\\EN_THAI_WEB\\\\.claude\\\\worktrees\\\\agent-adff9d8f8deaedc7e\" diff master -- src/app/\\\\\\(dashboard\\\\\\)/review/ReviewClient.tsx)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(npx next *)",
+      "Bash(cat)",
+      "Bash(grep -c '\"quiz\": \\\\[{ \"q\": \"string\", \"options\": \\\\[\"A\",\"B\",\"C\",\"D\"\\\\], \"answer\": 0 }\\\\]' src/services/lesson.service.ts)",
+      "Bash(git mv *)",
+      "Bash(git rm *)",
+      "Bash(timeout 240 npm install ioredis --save)"
     ]
   }
 }
