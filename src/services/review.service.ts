@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
-import Groq from "groq-sdk";
+import { sanitizeQuiz } from "./lesson.service";
+import { generateJson } from "@/lib/ai-client";
 
 export type ReviewType =
   | "vocabulary"
@@ -63,11 +64,51 @@ function buildPrompt(
     simulation_topik: `Simulate a TOPIK (Test of Proficiency in Korean) test. ${count} questions including vocabulary, grammar, and reading comprehension in Korean language at intermediate level.`,
   };
 
+  const koreanScriptNote =
+    language === "korean"
+      ? `
+⚠️ KOREAN SCRIPT LOCK: every Korean word, sentence and option must be written in REAL HANGUL (한글).
+Romanised Korean ("annyeonghaseyo", "meogeoyo", "jeoneun") is FORBIDDEN in questions and options.
+Correct example: "다음 빈칸에 알맞은 것을 고르십시오." options ["먹어요","마셔요","자요","가요"].
+Only "explanation" is written in Vietnamese.
+`
+      : "";
+
+  // A random seed per generation so a second run on the same topic produces a different paper
+  const variantSeed = Math.random().toString(36).slice(2, 8);
+
   return `You are a ${lang} language teacher creating a quiz for Vietnamese learners.
 
 Task: ${typeDesc[type]}
 Number of questions: ${count}
 ${langNote}
+${koreanScriptNote}
+VARIANT CODE: ${variantSeed} — this must be a FRESH set of questions, not the ones you would write by default.
+
+MANDATORY QUESTION VARIETY — spread across these formats, never more than 1/3 of the paper in one format:
+- fill-in-blank inside a sentence
+- "which sentence is correct?" (4 full sentences)
+- error identification (spot the wrong part)
+- word meaning / closest synonym
+- short 2-line dialogue completion
+- sentence transformation (tense, negation, politeness, question form)
+- mini reading item: 1-2 sentences of context followed by a comprehension question
+- collocation / word-pairing question
+
+DIFFICULTY RAMP: first third = recall, middle third = applied usage, final third = harder items
+with longer sentences and subtle distractors.
+Spread the correct answers evenly across index 0, 1, 2 and 3 — do not favour one position.
+
+=== GIẢI THÍCH — BẮT BUỘC CHO MỌI CÂU ===
+"explanation" (tiếng Việt, 2-4 câu): nêu quy tắc/nghĩa đang được kiểm tra → chỉ rõ dấu hiệu
+TRONG CHÍNH CÂU HỎI khiến đáp án đó đúng → dịch nghĩa câu đúng sang tiếng Việt.
+CẤM viết chung chung kiểu "Đáp án B đúng" / "Vì đây là cách dùng đúng".
+
+"why_wrong": mảng đúng bằng số options, cùng thứ tự.
+- Vị trí đáp án đúng: chuỗi rỗng ""
+- Mỗi vị trí sai: 1 câu tiếng Việt nói RÕ sai ở đâu và vì sao, cụ thể tới mức
+  người học nhận ra lỗi của chính mình.
+- CẤM: "Đáp án này sai." / "Không phù hợp." / lặp cùng một câu cho nhiều phương án.
 
 Return ONLY valid JSON in this exact format, no markdown, no explanation outside JSON:
 {
@@ -79,7 +120,8 @@ Return ONLY valid JSON in this exact format, no markdown, no explanation outside
       "question": "string",
       "options": ["A", "B", "C", "D"],
       "answer": 0,
-      "explanation": "string (brief explanation in Vietnamese why this answer is correct)"
+      "explanation": "string (tiếng Việt: vì sao đáp án đúng là đúng)",
+      "why_wrong": ["", "vì sao B sai", "vì sao C sai", "vì sao D sai"]
     }
   ]
 }
@@ -207,18 +249,42 @@ export async function getOrGenerateReviewSet(
     }
   }
 
-  // ── Cache check — same params → reuse ────────────────────────────────────
-  const existing = await prisma.reviewSet.findFirst({
+  // ── Cache: keep several variants per (language, type, topic, level) ──────
+  // Reusing one single cached set meant a learner redoing a review always got the
+  // exact same paper. We build up to MAX_VARIANTS different papers, then serve a
+  // random one with its questions reshuffled.
+  const MAX_VARIANTS = 4;
+  const cached = await prisma.reviewSet.findMany({
     where: { language, type, topic, level },
     include: { questions: { orderBy: { order: "asc" } } },
   });
-  if (existing) return existing;
+
+  const pickCached = () => {
+    const chosen = cached[Math.floor(Math.random() * cached.length)];
+    return {
+      ...chosen,
+      questions: shuffleArr(chosen.questions).map((q, i) => ({ ...q, order: i + 1 })),
+    };
+  };
+
+  // Enough variants banked → just serve one of them
+  if (cached.length >= MAX_VARIANTS) return pickCached();
+
+  const apiKey = process.env.GROQ_API_KEY;
+  // No AI available → fall back to whatever is already cached
+  if (!apiKey) {
+    if (cached.length > 0) return pickCached();
+    throw new Error("GROQ_API_KEY not configured");
+  }
+
+  // Some variants exist but not the full set: usually generate a new one to grow the
+  // bank, but sometimes reuse so we don't hit the AI on every single attempt.
+  if (cached.length > 0 && Math.random() < cached.length / (MAX_VARIANTS + 1)) {
+    return pickCached();
+  }
 
   // ── Generate via Groq ─────────────────────────────────────────────────────
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error("GROQ_API_KEY not configured");
 
-  const groq = new Groq({ apiKey });
   const count = QUESTION_COUNT[type];
 
   // For grammar/vocab review: personalize by including user's studied topics in prompt
@@ -232,26 +298,53 @@ export async function getOrGenerateReviewSet(
     } catch { /* ignore — personalisation is optional */ }
   }
 
-  const prompt = buildPrompt(language, type, topic, level, count) + personalContext;
+  // Tell the model which variants already exist so it writes something genuinely new
+  const avoidContext =
+    cached.length > 0
+      ? `\n\nAVOID REPEATING: ${cached.length} other quiz set(s) already exist for this topic. Write questions that test the same material from DIFFERENT angles, with different sentences and different vocabulary examples.`
+      : "";
 
-  const result = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
+  const prompt = buildPrompt(language, type, topic, level, count) + personalContext + avoidContext;
+
+  const { data: text } = await generateJson({
     messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
+    temperature: 0.9,
   });
-  const text = result.choices[0]?.message?.content ?? "{}";
 
-  const parsed = JSON.parse(text) as {
-    title: string;
-    description: string;
-    questions: {
-      order: number;
-      question: string;
-      options: string[];
-      answer: number;
-      explanation?: string;
-    }[];
-  };
+  let parsed: { title?: unknown; description?: unknown; questions?: unknown };
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    if (cached.length > 0) return pickCached();
+    throw new Error("AI trả về dữ liệu không hợp lệ");
+  }
+
+  // Drop malformed items — a question with a missing option list or an out-of-range
+  // answer index renders as an unanswerable blank in the quiz screen.
+  const questions = sanitizeQuiz(
+    (Array.isArray(parsed.questions) ? parsed.questions : []).map((q) => {
+      const item = q as Record<string, unknown>;
+      return {
+        q: item.question,
+        options: item.options,
+        answer: item.answer,
+        explanation: item.explanation,
+        why_wrong: item.why_wrong,
+      };
+    })
+  ).map((q, i) => ({
+    order: i + 1,
+    question: q.q,
+    options: q.options,
+    answer: q.answer,
+    explanation: q.explanation ?? null,
+    whyWrong: q.whyWrong ?? [],
+  }));
+
+  if (questions.length === 0) {
+    if (cached.length > 0) return pickCached();
+    throw new Error("AI không tạo được câu hỏi hợp lệ");
+  }
 
   const reviewSet = await prisma.reviewSet.create({
     data: {
@@ -259,18 +352,10 @@ export async function getOrGenerateReviewSet(
       type,
       topic,
       level,
-      title: parsed.title,
-      description: parsed.description,
+      title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title.trim() : `Ôn tập ${topic}`,
+      description: typeof parsed.description === "string" ? parsed.description : null,
       duration: DURATION[type],
-      questions: {
-        create: parsed.questions.map((q) => ({
-          order: q.order,
-          question: q.question,
-          options: q.options,
-          answer: q.answer,
-          explanation: q.explanation ?? null,
-        })),
-      },
+      questions: { create: questions },
     },
     include: { questions: { orderBy: { order: "asc" } } },
   });
@@ -278,10 +363,17 @@ export async function getOrGenerateReviewSet(
   return reviewSet;
 }
 
-export async function getReviewSets(language?: string) {
+/**
+ * List review sets, newest first.
+ *
+ * Bounded on purpose: every generated variant is a row, so an unbounded findMany would
+ * grow without limit and the /review page loads the whole list into the browser.
+ */
+export async function getReviewSets(language?: string, limit = 60) {
   return prisma.reviewSet.findMany({
     where: language ? { language } : undefined,
     orderBy: { createdAt: "desc" },
+    take: Math.min(200, Math.max(1, limit)),
     include: { _count: { select: { questions: true } } },
   });
 }

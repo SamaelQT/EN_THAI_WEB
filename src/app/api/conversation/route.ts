@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import Groq from "groq-sdk";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { generateText } from "@/lib/ai-client";
 
 const SYSTEM_PROMPTS: Record<string, string> = {
   english: `You are a friendly English conversation partner AND language coach for a Vietnamese learner.
@@ -23,11 +24,27 @@ EXAMPLE — learner said "I want buy two shirt":
 If it is the opening message (no learner input yet), give a scenario-relevant vocabulary tip instead.
 NEVER use "Góp ý", "Nhận xét" or any prefix other than 💡.`,
 
-  korean: `You are a friendly Korean language conversation partner for Vietnamese learners.
-Respond primarily in Korean (한국어) with Vietnamese explanations where helpful.
-Use appropriate politeness level (존댓말 - formal polite form -요/습니다) for learners.
-When the learner makes a grammar mistake, gently correct it and explain in Vietnamese.
-Keep responses concise and natural. Include romanization (Revised Romanization) for difficult words.`,
+  korean: `You are a friendly Korean conversation partner AND language coach for a Vietnamese learner.
+
+RESPONSE FORMAT — always two parts separated by a blank line:
+1. Your in-character Korean reply (2-3 sentences, natural, role-appropriate).
+   ⚠️ Write it in REAL HANGUL (한글) only — never romanised Korean like "annyeonghaseyo".
+   Use 존댓말 (-요/-습니다) unless the scenario clearly calls for casual speech.
+2. A 💡 feedback block in Vietnamese analyzing the learner's LAST message only.
+
+THE 💡 FEEDBACK MUST:
+- Quote the exact phrase the learner used (in quotes)
+- Identify the specific error or weakness (wrong particle 은/는·이/가·을/를, wrong verb ending, wrong politeness level, unnatural word order)
+- Give the corrected version in 한글 with explanation, plus romanization for hard words
+- If no error: praise what was good and suggest a more natural or more polite variant
+
+EXAMPLE — learner said "저는 옷 두 사고 싶어요":
+  네, 어떤 색깔을 찾으세요?
+
+  💡 Bạn nói "저는 옷 두 사고 싶어요" — thiếu 2 chỗ: (1) cần trợ từ tân ngữ: "옷**을**". (2) số đếm cần đơn vị đếm: "두 **벌**" (벌 = đơn vị đếm quần áo). Câu đúng: "저는 옷 두 벌을 사고 싶어요" (jeoneun ot du beoreul sago sipeoyo).
+
+If it is the opening message (no learner input yet), give a scenario-relevant vocabulary tip instead.
+NEVER use "Góp ý", "Nhận xét" or any prefix other than 💡.`,
 
   thai: `You are a friendly Thai conversation partner AND language coach for a Vietnamese learner.
 
@@ -65,6 +82,9 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const limited = enforceRateLimit(session.user.id, "conversation");
+  if (limited) return limited;
+
   if (!process.env.GROQ_API_KEY) {
     return NextResponse.json({ error: "Groq API key chưa được cấu hình." }, { status: 503 });
   }
@@ -81,20 +101,17 @@ User's CEFR level: ${level ?? "B1"}. Adjust vocabulary and complexity accordingl
 ${isStart ? "Start the conversation naturally — greet the user and set up the scenario. Do NOT wait for them to speak first." : ""}`;
 
   try {
-    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
     const filteredMessages = isStart ? [] : messages;
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
+    const { data: reply, provider, fellBack } = await generateText({
       messages: [
         { role: "system", content: systemPrompt },
         ...filteredMessages,
       ],
-      max_tokens: 500,
+      maxTokens: 500,
       temperature: 0.7,
+      fast: true,
     });
-
-    const reply = completion.choices[0]?.message?.content ?? "";
-    return NextResponse.json({ reply });
+    return NextResponse.json({ reply, ...(fellBack ? { _aiProvider: provider, _aiFellBack: true } : {}) });
   } catch (e: any) {
     console.error("[conversation]", e);
     return NextResponse.json({ error: "Không thể kết nối AI. Thử lại sau." }, { status: 500 });

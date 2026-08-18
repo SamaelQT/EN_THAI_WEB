@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getOrGenerateReviewSet, getReviewSets, type ReviewType } from "@/services/review.service";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -16,6 +17,9 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const limited = enforceRateLimit(session.user.id, "quizGenerate");
+  if (limited) return limited;
 
   const { language, type, topic, level } = await req.json();
   if (!language || !type || !topic || !level) {

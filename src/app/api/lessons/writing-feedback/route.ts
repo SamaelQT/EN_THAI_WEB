@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import Groq from "groq-sdk";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { generateJson } from "@/lib/ai-client";
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const limited = enforceRateLimit(session.user.id, "writingFeedback");
+  if (limited) return limited;
 
   const { writing, prompt, guide, language, level } = await req.json() as {
     writing: string;
@@ -15,6 +19,10 @@ export async function POST(req: Request) {
   };
 
   if (!writing?.trim()) return NextResponse.json({ error: "Missing writing" }, { status: 400 });
+  // Cap the payload so one request can't send a novel to the AI
+  if (writing.length > 8000) {
+    return NextResponse.json({ error: "Bài viết quá dài (tối đa 8000 ký tự)" }, { status: 413 });
+  }
 
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "AI not configured" }, { status: 503 });
@@ -54,13 +62,25 @@ Rules:
 - Be encouraging but honest — mention both what is good and what needs work
 - All text in Vietnamese except the "corrected" field (which is in ${langLabel})`;
 
-  const groq = new Groq({ apiKey });
-  const result = await groq.chat.completions.create({
-    model: "llama-3.3-70b-versatile",
-    messages: [{ role: "user", content: evalPrompt }],
-    response_format: { type: "json_object" },
-  });
+  try {
+    const { data, provider, fellBack } = await generateJson({
+      messages: [{ role: "user", content: evalPrompt }],
+    });
 
-  const parsed = JSON.parse(result.choices[0]?.message?.content ?? "{}");
-  return NextResponse.json(parsed);
+    const parsed = JSON.parse(data || "{}") as Record<string, unknown>;
+    if (fellBack) { parsed._aiProvider = provider; parsed._aiFellBack = true; }
+
+    // The score drives the coloured badge in the UI — keep it inside 0-100
+    const rawScore = Number(parsed.score);
+    parsed.score = Number.isFinite(rawScore) ? Math.min(100, Math.max(0, Math.round(rawScore))) : 0;
+
+    if (typeof parsed.feedback !== "string") {
+      return NextResponse.json({ error: "AI trả về dữ liệu không hợp lệ. Thử lại." }, { status: 502 });
+    }
+
+    return NextResponse.json(parsed);
+  } catch (e) {
+    console.error("[writing-feedback]", e);
+    return NextResponse.json({ error: "Không chấm được bài viết. Thử lại sau." }, { status: 502 });
+  }
 }
