@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/db";
 import { scoreToLevel } from "@/lib/placement-data";
+import { scoreSubmission, TEST_TYPES, type Language, type TestType } from "@/lib/placement-engine";
+import { deleteRoadmapById } from "./roadmap.service";
+
+const LANGUAGES: Language[] = ["english", "thai", "korean"];
 
 export async function submitPlacementTest(
   userId: string,
@@ -7,23 +11,39 @@ export async function submitPlacementTest(
   score: number,
   answers: unknown[],
   clientLevel?: string,
-  testType?: string
+  testType?: string,
+  questionIds?: unknown,
 ) {
-  if (!["english", "thai", "korean"].includes(language)) throw new Error("Invalid language");
+  if (!LANGUAGES.includes(language as Language)) throw new Error("Invalid language");
 
-  const level = clientLevel ?? scoreToLevel(score);
+  const type = (testType ?? "cefr") as TestType;
+  if (!TEST_TYPES[language as Language].includes(type)) throw new Error("Invalid test type");
+
+  // Prefer the server's own scoring: the browser only reports which questions it served.
+  // Falling back to the client's numbers keeps older clients working, but any submission
+  // that ships question ids is scored here and cannot be forged.
+  let level = clientLevel ?? scoreToLevel(score);
+  let finalScore = Math.min(100, Math.max(0, Math.round(Number(score) || 0)));
+
+  if (Array.isArray(questionIds) && questionIds.every((id) => typeof id === "string")) {
+    const verified = scoreSubmission(type, questionIds as string[], answers as (number | null)[]);
+    if (!verified) throw new Error("Invalid submission");
+    level = verified.level;
+    finalScore = verified.score;
+  }
+
   const test = await prisma.placementTest.create({
     data: {
       userId,
       language,
       level,
-      score,
+      score: finalScore,
       answers: JSON.stringify(answers),
-      testType: testType ?? "cefr",
+      testType: type,
     },
   });
 
-  return { test, level, score };
+  return { test, level, score: finalScore };
 }
 
 export async function getPlacementTests(userId: string, language?: string | null) {
@@ -61,7 +81,7 @@ export async function deletePlacementTest(
 
   // Delete linked roadmap first (Prisma will cascade weeks → days)
   if (linkedRoadmap) {
-    await prisma.roadmap.delete({ where: { id: linkedRoadmap.id } });
+    await deleteRoadmapById(linkedRoadmap.id);
   }
 
   await prisma.placementTest.delete({ where: { id: testId } });

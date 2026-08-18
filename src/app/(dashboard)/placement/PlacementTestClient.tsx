@@ -163,17 +163,20 @@ export default function PlacementTestClient({ englishTest, thaiTest, koreanTest,
 
   async function submitTest(finalAnswers: (number | null)[]) {
     setSubmitting(true);
-    const res = calculateTestResult(testType, questions, finalAnswers);
+    const local = calculateTestResult(testType, questions, finalAnswers);
 
+    // Send the ids of the questions we served so the server re-scores from its own
+    // answer key — the level it stores is the one it computed, not the one we sent.
     const apiRes = await fetch("/api/placement", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         language,
         testType,
-        score: res.score,
+        score: local.score,
         answers: finalAnswers,
-        level: res.level,
+        level: local.level,
+        questionIds: questions.map((q) => q.id),
       }),
     });
     setSubmitting(false);
@@ -183,7 +186,13 @@ export default function PlacementTestClient({ englishTest, thaiTest, koreanTest,
       return;
     }
 
-    setResult(res);
+    // Show whatever the server decided, so the screen matches the database
+    const saved = await apiRes.json().catch(() => null);
+    setResult(
+      saved?.level && saved?.score != null
+        ? { ...local, level: saved.level, score: saved.score }
+        : local
+    );
     setState("done");
   }
 

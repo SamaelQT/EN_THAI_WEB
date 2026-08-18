@@ -62,6 +62,52 @@ export const TEST_META: Record<TestType, { label: string; desc: string; question
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function castAs<T>(v: unknown): T { return v as T; }
 
+// ── Server-side scoring ────────────────────────────────────────────────────
+// The browser picks a random subset of questions, so it tells the server which ids
+// it served. The server then re-scores from its own copy of the answer key —
+// the level in the database is never whatever the client claimed it was.
+
+import { ENGLISH_QUESTIONS, ENGLISH_QUESTIONS_B, THAI_QUESTIONS, THAI_QUESTIONS_B } from "./placement-data";
+import { TOEIC_QUESTIONS } from "./toeic-data";
+import { IELTS_QUESTIONS } from "./ielts-data";
+import { CUTFL_QUESTIONS } from "./cutfl-data";
+import { KOREAN_QUESTIONS } from "./korean-data";
+
+const ALL_QUESTIONS_BY_ID = new Map<string, ActiveQuestion>();
+for (const pool of [
+  ENGLISH_QUESTIONS, ENGLISH_QUESTIONS_B, THAI_QUESTIONS, THAI_QUESTIONS_B,
+  TOEIC_QUESTIONS, IELTS_QUESTIONS, CUTFL_QUESTIONS, KOREAN_QUESTIONS,
+] as { id: string }[][]) {
+  for (const q of pool) ALL_QUESTIONS_BY_ID.set(q.id, q as unknown as ActiveQuestion);
+}
+
+/**
+ * Re-score a submitted placement test from the server's own answer key.
+ * Returns null when the ids don't resolve — the caller should reject the submission
+ * rather than trusting the client's numbers.
+ */
+export function scoreSubmission(
+  testType: TestType,
+  questionIds: string[],
+  answers: (number | null)[],
+): PlacementResult | null {
+  if (!Array.isArray(questionIds) || questionIds.length === 0) return null;
+  if (!Array.isArray(answers) || answers.length !== questionIds.length) return null;
+
+  const questions: ActiveQuestion[] = [];
+  for (const id of questionIds) {
+    const q = ALL_QUESTIONS_BY_ID.get(id);
+    if (!q) return null;
+    questions.push(q);
+  }
+
+  const cleanAnswers = answers.map((a) =>
+    typeof a === "number" && Number.isInteger(a) && a >= 0 ? a : null
+  );
+
+  return calculateTestResult(testType, questions, cleanAnswers);
+}
+
 export function getTestQuestions(language: Language, testType: TestType): ActiveQuestion[] {
   switch (testType) {
     case "cefr": {
