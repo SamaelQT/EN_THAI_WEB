@@ -36,12 +36,17 @@ export async function GET(req: Request) {
 
   const now = new Date();
 
-  const users = await prisma.user.findMany({
-    where: { reminderEnabled: true },
+  // No `where: { reminderEnabled: true }` here: these fields were added to the schema
+  // after the existing documents were written, and MongoDB stores no value for them at
+  // all — a server-side filter matches zero users. Prisma fills in the @default when it
+  // reads the row, so the opt-out check has to happen in JS.
+  const allUsers = await prisma.user.findMany({
     select: {
-      id: true, name: true, reminderHour: true, utcOffsetMin: true, lastReminderAt: true,
+      id: true, name: true, reminderEnabled: true,
+      reminderHour: true, utcOffsetMin: true, lastReminderAt: true,
     },
   });
+  const users = allUsers.filter((u) => u.reminderEnabled !== false);
 
   let sent = 0;
   let skipped = 0;
