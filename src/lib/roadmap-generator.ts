@@ -318,6 +318,69 @@ export const CEFR_WEEK_THEMES: Record<Level, string[]> = {
 // Keep ENGLISH_WEEK_THEMES as alias for CEFR (used by existing code paths & free practice)
 export const ENGLISH_WEEK_THEMES: Record<Level, string[]> = CEFR_WEEK_THEMES;
 
+// ─── Thai Week Themes — spoken-only (romanized) ───────────────────────────────
+// For learners who want to SPEAK Thai without learning the 44-consonant script.
+// Titles are in Vietnamese on purpose: a learner who can't read Thai script
+// shouldn't be handed a roadmap whose week titles they cannot read either.
+// Content is taught through romanized transcription (paiboon-style) + audio.
+
+export const THAI_SPOKEN_WEEK_THEMES: Record<Level, string[]> = {
+  A1: [
+    "Chào hỏi & giới thiệu bản thân",
+    "5 thanh điệu tiếng Thái (nghe & bắt chước)",
+    "Số đếm, giá tiền, thời gian",
+    "Câu hỏi cơ bản: ai, gì, ở đâu, bao nhiêu",
+  ],
+  A2: [
+    "Gọi món & ăn uống ở quán",
+    "Đi chợ, mặc cả, mua sắm",
+    "Đi lại: taxi, xe ôm, hỏi đường",
+    "Gia đình, bạn bè, nghề nghiệp",
+    "Thời tiết & trò chuyện xã giao",
+    "Đặt phòng khách sạn & check-in",
+  ],
+  B1: [
+    "Trò chuyện nơi làm việc",
+    "Hẹn gặp, sắp lịch, xác nhận",
+    "Đi khám bệnh & mô tả triệu chứng",
+    "Kể lại một câu chuyện đã xảy ra",
+    "Bày tỏ ý kiến, đồng ý & phản đối",
+    "Lễ hội và văn hóa Thái trong hội thoại",
+    "Gọi điện thoại & nhắn tin",
+    "Xử lý tình huống rắc rối (mất đồ, nhầm lẫn)",
+  ],
+  B2: [
+    "Thương lượng & đàm phán trong công việc",
+    "Trình bày ý tưởng trong cuộc họp",
+    "Tiếng Thái thân mật vs lịch sự (register)",
+    "Thành ngữ & cách nói tự nhiên hàng ngày",
+    "Nghe hiểu người Thái nói nhanh",
+    "Tranh luận về chủ đề xã hội",
+    "Kể chuyện dài mạch lạc",
+    "Hài hước & cách nói bóng gió",
+    "Giao tiếp qua điện thoại trong công việc",
+    "Phân biệt giọng vùng miền",
+    "Phỏng vấn xin việc bằng tiếng Thái",
+    "Hội thoại tình huống thực tế nâng cao",
+  ],
+  C1: [
+    "Thuyết trình chuyên nghiệp bằng tiếng Thái",
+    "Ngôn ngữ trang trọng trong kinh doanh",
+    "Nghe podcast & tin tức tiếng Thái",
+    "Kính ngữ và cách xưng hô theo thứ bậc",
+    "Diễn đạt sắc thái tinh tế",
+    "Phản biện và bảo vệ quan điểm",
+    "Giao tiếp đa văn hóa Việt – Thái",
+    "Tổng ôn giao tiếp toàn diện",
+  ],
+  C2: [
+    "Nói tiếng Thái tự nhiên như người bản xứ",
+    "Sắc thái, ẩn ý và ngữ điệu nâng cao",
+    "Hùng biện và thuyết phục",
+    "Tổng ôn cuối khóa",
+  ],
+};
+
 // ─── Thai Week Themes ─────────────────────────────────────────────────────────
 
 export const THAI_WEEK_THEMES: Record<Level, string[]> = {
@@ -468,12 +531,16 @@ export function generateWeeklyPlan(
   busyDays: number[] = [],
   weeklyHours = 7,
   learningFocus = "comprehensive",
-  targetExam = "general"
+  targetExam = "general",
+  scriptMode = "native"
 ): WeekPlan[] {
+  // Spoken-only Thai: no script means no alphabet weeks and no reading/writing sessions
+  const spokenOnly = scriptMode === "romanized" && language === "thai";
+
   // Pick the right theme pool
   let themes: Record<Level, string[]>;
   if (language === "thai") {
-    themes = THAI_WEEK_THEMES;
+    themes = spokenOnly ? THAI_SPOKEN_WEEK_THEMES : THAI_WEEK_THEMES;
   } else if (language === "korean") {
     themes = KOREAN_WEEK_THEMES;
   } else if (targetExam === "TOEIC") {
@@ -502,8 +569,12 @@ export function generateWeeklyPlan(
     allThemes.push(...(themes[LEVEL_ORDER[i]] ?? []));
   }
 
-  // Resolve skill pool for this focus
-  const focusSkills = skillPool[learningFocus] ?? skillPool.comprehensive;
+  // Resolve skill pool for this focus.
+  // Spoken-only overrides the focus: reading and writing Thai are meaningless
+  // when the learner has deliberately opted out of the script.
+  const focusSkills = spokenOnly
+    ? FOCUS_SKILLS.conversational
+    : (skillPool[learningFocus] ?? skillPool.comprehensive);
 
   // Lessons per week: allow multiple sessions per day for high-intensity
   const availableDaysPerWeek = Math.max(1, 7 - busyDays.length);

@@ -26,7 +26,7 @@ type Day = { id: string; dayNumber: number; lessonType: string; status: string }
 type Week = { id: string; weekNumber: number; theme: string; skills: string; status: string; startDate: Date; days: Day[] };
 type Roadmap = {
   id: string; language: string; targetExam: string | null; targetScore: number | null;
-  currentLevel: string; targetLevel: string; learningFocus: string;
+  currentLevel: string; targetLevel: string; learningFocus: string; scriptMode?: string | null;
   startDate: Date; targetDate: Date;
   weeklyHours: number; totalWeeks: number; status: string; weeks: Week[];
 };
@@ -90,6 +90,22 @@ const FOCUS_OPTIONS = [
   },
 ];
 
+// Thai only — Hangul and the Latin alphabet aren't worth a script-free track
+const SCRIPT_MODE_OPTIONS = [
+  {
+    value: "native",
+    label: "Học cả chữ Thái",
+    desc: "Đọc viết được อักษรไทย — cần cho thi cử, đọc biển hiệu, tài liệu",
+    icon: "🇹🇭",
+  },
+  {
+    value: "romanized",
+    label: "Chỉ giao tiếp",
+    desc: "Không học chữ Thái. Dùng phiên âm Latin + audio để nghe nói",
+    icon: "💬",
+  },
+];
+
 const FOCUS_LABEL: Record<string, string> = {
   comprehensive: "Toàn diện",
   conversational: "Giao tiếp",
@@ -135,6 +151,7 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
     targetScore: "",
     targetLevel: "",        // for CEFR / CU-TFL
     learningFocus: "comprehensive",
+    scriptMode: "native",
     targetDate: "",
     weeklyHours: "7",
     busyDays: [] as number[],
@@ -173,7 +190,9 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
 
   // When language changes, reset exam and test
   function onLanguageChange(v: string) {
-    setForm((prev) => ({ ...prev, language: v, targetExam: "", placementTestId: "", targetLevel: "", busyDays: [] }));
+    // scriptMode only applies to Thai — reset it so a leftover "romanized"
+    // from a Thai draft doesn't ride along into an English or Korean roadmap
+    setForm((prev) => ({ ...prev, language: v, targetExam: "", placementTestId: "", targetLevel: "", busyDays: [], scriptMode: "native" }));
     setFeasibilityError("");
   }
 
@@ -210,6 +229,7 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
         targetScore: form.targetScore ? Number(form.targetScore) : null,
         targetLevel: form.targetLevel || null,
         learningFocus: form.learningFocus,
+        scriptMode: form.scriptMode,
         targetDate: form.targetDate,
         weeklyHours: Number(form.weeklyHours),
         busyDays: form.busyDays,
@@ -346,6 +366,40 @@ export default function RoadmapClient({ roadmaps, tests }: Props) {
                       })}
                     </div>
                   </div>
+
+                  {/* Step 2b – Script mode (Thai only) */}
+                  {form.language === "thai" && (
+                    <div className="space-y-2">
+                      <Label>Chữ viết tiếng Thái</Label>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {SCRIPT_MODE_OPTIONS.map((opt) => {
+                          const selected = form.scriptMode === opt.value;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setField("scriptMode", opt.value)}
+                              className={`text-left p-3 rounded-lg border-2 transition-colors ${
+                                selected
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border hover:border-muted-foreground/40"
+                              }`}
+                            >
+                              <div className="text-lg mb-1">{opt.icon}</div>
+                              <div className="font-medium text-sm">{opt.label}</div>
+                              <div className="text-xs text-muted-foreground mt-0.5 leading-snug">{opt.desc}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {form.scriptMode === "romanized" && (
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          Lộ trình sẽ bỏ qua 44 phụ âm và các bài đọc/viết. Mọi từ đều hiển thị
+                          bằng phiên âm Latin kèm audio — bạn học nói và nghe, không cần đọc chữ Thái.
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Step 3 – Target exam */}
                   {form.language && (
@@ -695,6 +749,9 @@ function RoadmapCard({ roadmap }: { roadmap: Roadmap }) {
               {FOCUS_OPTIONS.find((f) => f.value === roadmap.learningFocus)?.icon}{" "}
               {FOCUS_LABEL[roadmap.learningFocus] ?? roadmap.learningFocus}
             </Badge>
+            {roadmap.scriptMode === "romanized" && (
+              <Badge variant="outline" className="font-normal">💬 Không học chữ Thái</Badge>
+            )}
           </CardTitle>
           <div className="flex items-center gap-2">
             <span className="flex items-center gap-1 text-sm text-muted-foreground">

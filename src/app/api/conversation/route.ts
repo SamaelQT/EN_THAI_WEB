@@ -89,13 +89,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Groq API key chưa được cấu hình." }, { status: 503 });
   }
 
-  const { messages, language, scenario, level } = await req.json();
+  const { messages, language, scenario, level, scriptMode } = await req.json();
   if (!messages || !language || !scenario) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
+  // A learner on the spoken-only Thai track cannot read a reply written in Thai script
+  const spokenOnly = language === "thai" && scriptMode === "romanized";
+  const romanNote = spokenOnly
+    ? `
+⚠️ THIS LEARNER CANNOT READ THAI SCRIPT. Write every Thai word in ROMANISED form with tone marks
+(à â á ǎ), never in Thai characters. Example: "sà-wàt-dii khráp! ao à-rai khráp?" — not "สวัสดีครับ".
+This applies to your in-character reply, the 💡 feedback, and every correction you quote.`
+    : "";
+
   const isStart = messages.length === 1 && messages[0].content === "__START__";
-  const systemPrompt = `${SYSTEM_PROMPTS[language] ?? SYSTEM_PROMPTS.english}
+  const systemPrompt = `${SYSTEM_PROMPTS[language] ?? SYSTEM_PROMPTS.english}${romanNote}
 ${SCENARIO_PROMPTS[scenario] ?? ""}
 User's CEFR level: ${level ?? "B1"}. Adjust vocabulary and complexity accordingly.
 ${isStart ? "Start the conversation naturally — greet the user and set up the scenario. Do NOT wait for them to speak first." : ""}`;

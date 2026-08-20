@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Logo } from "@/components/Logo";
 import {
   LayoutDashboard,
   BookOpen,
@@ -57,8 +58,8 @@ export default function Sidebar({
     <aside className="w-60 shrink-0 border-r bg-card flex flex-col h-screen sticky top-0">
       {/* Logo */}
       <div className="px-6 py-5 border-b">
-        <Link href="/" className="text-xl font-bold text-primary hover:opacity-80 transition-opacity">
-          LinguaPath
+        <Link href="/" className="inline-block hover:opacity-80 transition-opacity">
+          <Logo markClass="h-7 w-7" textClass="text-lg font-bold" />
         </Link>
       </div>
 

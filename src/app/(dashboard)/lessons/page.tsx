@@ -81,7 +81,7 @@ export default async function LessonsPage({
     ? { id: enRoadmap.id, language: enRoadmap.language, currentLevel: enRoadmap.currentLevel, targetLevel: enRoadmap.targetLevel, totalWeeks: enRoadmap.totalWeeks, targetExam: enRoadmap.targetExam ?? "general", targetScore: enRoadmap.targetScore ?? null, placementTestLevel: enRoadmap.placementTest?.level ?? null, placementTestType: enRoadmap.placementTest?.testType ?? null }
     : null;
   const thRoadmapMeta = thRoadmap
-    ? { id: thRoadmap.id, language: thRoadmap.language, currentLevel: thRoadmap.currentLevel, targetLevel: thRoadmap.targetLevel, totalWeeks: thRoadmap.totalWeeks, targetExam: thRoadmap.targetExam ?? "general", targetScore: thRoadmap.targetScore ?? null, placementTestLevel: thRoadmap.placementTest?.level ?? null, placementTestType: thRoadmap.placementTest?.testType ?? null }
+    ? { id: thRoadmap.id, language: thRoadmap.language, currentLevel: thRoadmap.currentLevel, targetLevel: thRoadmap.targetLevel, totalWeeks: thRoadmap.totalWeeks, targetExam: thRoadmap.targetExam ?? "general", targetScore: thRoadmap.targetScore ?? null, placementTestLevel: thRoadmap.placementTest?.level ?? null, placementTestType: thRoadmap.placementTest?.testType ?? null, scriptMode: thRoadmap.scriptMode ?? "native" }
     : null;
   const krRoadmapMeta = krRoadmap
     ? { id: krRoadmap.id, language: krRoadmap.language, currentLevel: krRoadmap.currentLevel, targetLevel: krRoadmap.targetLevel, totalWeeks: krRoadmap.totalWeeks, targetExam: krRoadmap.targetExam ?? "general", targetScore: krRoadmap.targetScore ?? null, placementTestLevel: krRoadmap.placementTest?.level ?? null, placementTestType: krRoadmap.placementTest?.testType ?? null }
