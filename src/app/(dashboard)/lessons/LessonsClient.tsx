@@ -135,7 +135,7 @@ function ScoreBadge({ score }: { score: number }) {
 
 // ── Types ─────────────────────────────────────────────────────
 
-type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number; targetExam?: string; targetScore?: number | null; placementTestLevel?: string | null; placementTestType?: string | null; scriptMode?: string };
+type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number; targetExam?: string; targetScore?: number | null; placementTestLevel?: string | null; placementTestType?: string | null; scriptMode?: string | null };
 
 type Props = {
   enRoadmap: Roadmap | null;

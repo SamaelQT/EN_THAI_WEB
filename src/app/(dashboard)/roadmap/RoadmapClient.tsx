@@ -26,7 +26,7 @@ type Day = { id: string; dayNumber: number; lessonType: string; status: string }
 type Week = { id: string; weekNumber: number; theme: string; skills: string; status: string; startDate: Date; days: Day[] };
 type Roadmap = {
   id: string; language: string; targetExam: string | null; targetScore: number | null;
-  currentLevel: string; targetLevel: string; learningFocus: string; scriptMode?: string;
+  currentLevel: string; targetLevel: string; learningFocus: string; scriptMode?: string | null;
   startDate: Date; targetDate: Date;
   weeklyHours: number; totalWeeks: number; status: string; weeks: Week[];
 };
