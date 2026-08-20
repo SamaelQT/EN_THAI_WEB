@@ -11,9 +11,9 @@ export async function POST(req: Request) {
   const limited = enforceRateLimit(session.user.id, "lessonGenerate");
   if (limited) return limited;
 
-  const { lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId } = await req.json();
+  const { lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId, scriptMode } = await req.json();
   try {
-    const lesson = await generateLesson(lessonType, language, level, topic, session.user.id, examType, weekNumber, totalWeeks, dayId);
+    const lesson = await generateLesson(lessonType, language, level, topic, session.user.id, examType, weekNumber, totalWeeks, dayId, scriptMode);
     // The provider markers are non-enumerable on the lesson object so they never get
     // written into the cached JSON — copy them onto the response explicitly so the UI
     // can tell the learner when Groq was down and a fallback answered.

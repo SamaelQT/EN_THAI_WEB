@@ -203,6 +203,8 @@ model Roadmap {
   updatedAt       DateTime  @updatedAt
 
   learningFocus   String    @default("comprehensive")
+  // "native" = học cả chữ viết bản địa; "romanized" = chỉ giao tiếp, dùng phiên âm Latin
+  scriptMode      String    @default("native")
 
   placementTestId String        @unique
   placementTest   PlacementTest @relation(fields: [placementTestId], references: [id])

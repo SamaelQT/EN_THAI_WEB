@@ -7,6 +7,7 @@ import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Logo } from "@/components/Logo";
 import {
   Card,
   CardContent,
@@ -61,7 +62,7 @@ export default function RegisterPage() {
   return (
     <Card>
       <CardHeader className="text-center">
-        <div className="text-3xl font-bold text-primary mb-1">LinguaPath</div>
+        <div className="flex justify-center mb-1"><Logo markClass="h-9 w-9" textClass="text-3xl font-bold" /></div>
         <CardTitle>Tạo tài khoản</CardTitle>
         <CardDescription>Bắt đầu với bài kiểm tra trình độ ngay sau khi đăng ký</CardDescription>
       </CardHeader>

@@ -10,6 +10,8 @@ import { Loader2, PlayCircle, BookOpen, Volume2, Mic, Square } from "lucide-reac
 import CalendarView, { type LessonDay } from "./CalendarView";
 import { CEFR_WEEK_THEMES, TOEIC_WEEK_THEMES, IELTS_WEEK_THEMES, THAI_WEEK_THEMES, KOREAN_WEEK_THEMES, type Level } from "@/lib/roadmap-generator";
 import { scorePronunciation, type PronunciationResult } from "@/lib/pronunciation";
+import { useTtsRate, TTS_RATES } from "@/lib/tts";
+import SpeechRateControl from "@/components/SpeechRateControl";
 
 // Built-in lesson content for the MVP (expandable via AI later)
 const LESSON_CONTENT: Record<string, any> = {
@@ -133,7 +135,7 @@ function ScoreBadge({ score }: { score: number }) {
 
 // ── Types ─────────────────────────────────────────────────────
 
-type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number; targetExam?: string; targetScore?: number | null; placementTestLevel?: string | null; placementTestType?: string | null };
+type Roadmap = { id: string; language: string; currentLevel: string; targetLevel: string; totalWeeks: number; targetExam?: string; targetScore?: number | null; placementTestLevel?: string | null; placementTestType?: string | null; scriptMode?: string };
 
 type Props = {
   enRoadmap: Roadmap | null;
@@ -202,6 +204,8 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
   const [listeningVoices, setListeningVoices] = useState<string[]>(["", "", "", ""]);
   // Speaking lesson: the voice used for the "nghe mẫu" button on each phrase
   const [speakingVoiceURI, setSpeakingVoiceURI] = useState<string>("");
+  // Shared playback speed, remembered across lessons
+  const [ttsRate, setTtsRate] = useTtsRate();
   const [playingLineIdx, setPlayingLineIdx] = useState<number>(-1);
 
   useEffect(() => {
@@ -226,6 +230,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
         language: lang,
         scenario: convScenario,
         level: convLevel,
+        scriptMode: lang === "thai" ? (thRoadmap?.scriptMode ?? "native") : "native",
       }),
     })
       .then((r) => r.json())
@@ -241,7 +246,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
             const picked = voices.find((v) => v.voiceURI === selectedVoiceURI) ?? voices.find((v) => v.lang.startsWith(ttsLangVal.slice(0, 2)));
             if (picked) utt.voice = picked;
             utt.lang = ttsLangVal;
-            utt.rate = 0.9;
+            utt.rate = ttsRate;
             window.speechSynthesis.speak(utt);
           }
         }
@@ -317,6 +322,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
     window.speechSynthesis.cancel();
     const utt = new SpeechSynthesisUtterance(word);
     utt.lang = getTTSLang();
+    utt.rate = ttsRate;
     // Use the voice the learner picked for this lesson; fall back to any voice of the target language
     const voices = window.speechSynthesis.getVoices();
     const picked =
@@ -407,6 +413,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
       const { speaker, text } = lines[idx];
       const utt = new SpeechSynthesisUtterance(text);
       utt.lang = getTTSLang();
+      utt.rate = ttsRate;
 
       // Map speaker index to assigned voice (wraps if >4 speakers)
       const speakerIdx = speakers.indexOf(speaker);
@@ -523,12 +530,15 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
 
   async function openLesson(type: string, language: string, level: string, dayId?: string, topic?: string, examType?: string, weekNumber?: number, totalWeeks?: number) {
     const examSuffix = examType && examType !== "general" ? `_${examType.toLowerCase()}` : "";
+    // Spoken-only Thai is entirely different content, so it needs its own cache key
+    const scriptMode = language === "thai" ? (thRoadmap?.scriptMode ?? "native") : "native";
+    const scriptSuffix = scriptMode === "romanized" ? "_rom" : "";
     // Each roadmap day gets its own unique cache key to prevent content duplication
     const key = dayId
       ? `day_${dayId}`
       : topic
-        ? `${type}_${language}_${level}_${topic}${examSuffix}`
-        : `${type}_${language}_${level}`;
+        ? `${type}_${language}_${level}_${topic}${examSuffix}${scriptSuffix}`
+        : `${type}_${language}_${level}${scriptSuffix}`;
     const cached = LESSON_CONTENT[key];
     setActiveDayId(dayId ?? null);
     setActiveLessonLang(language);
@@ -568,7 +578,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
       const res = await fetch("/api/lessons/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonType: type, language, level, topic, examType, weekNumber, totalWeeks, dayId }),
+        body: JSON.stringify({ lessonType: type, language, level, topic, examType, weekNumber, totalWeeks, dayId, scriptMode }),
       });
       const data = await res.json();
       if (data.error) {
@@ -1077,7 +1087,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
         ?? availableVoices.find((v) => v.lang.startsWith(ttsLang.slice(0, 2)));
       if (picked) utt.voice = picked;
       utt.lang = ttsLang;
-      utt.rate = 0.9;
+      utt.rate = ttsRate;
       window.speechSynthesis.speak(utt);
     }
 
@@ -1089,7 +1099,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
         const res = await fetch("/api/conversation", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: newMessages, language: lang, scenario: convScenario, level: convLevel }),
+          body: JSON.stringify({ messages: newMessages, language: lang, scenario: convScenario, level: convLevel, scriptMode: lang === "thai" ? (thRoadmap?.scriptMode ?? "native") : "native" }),
         });
         const data = await res.json();
         if (data._aiFellBack) {
@@ -1224,6 +1234,16 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                   ))}
               </select>
             )}
+            <select
+              value={ttsRate}
+              onChange={(e) => setTtsRate(Number(e.target.value))}
+              className="text-xs rounded-md border bg-background px-2 py-1"
+              title="Tốc độ đọc"
+            >
+              {TTS_RATES.map((r) => (
+                <option key={r.value} value={r.value}>⏩ {r.label}</option>
+              ))}
+            </select>
             <Button variant="destructive" size="sm" onClick={endConversation}>Kết thúc</Button>
           </div>
         </div>
@@ -1651,6 +1671,12 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
         {/* B1 – Vocabulary with TTS buttons */}
         {!lessonContentHidden && activeLesson.words && (
           <div className="grid gap-4">
+            <SpeechRateControl
+              rate={ttsRate}
+              onChange={setTtsRate}
+              disabled={speakingIdx !== null}
+              className="rounded-lg border bg-muted/30 p-3"
+            />
             <Button
               variant={wordsSaved ? "outline" : "default"}
               size="sm"
@@ -1673,7 +1699,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                       <div className="flex items-center gap-2">
                         <p className="text-lg font-bold">{w.word}</p>
                         <button
-                          onClick={() => speakWord(w.word, i)}
+                          onClick={() => speakWord(w.thai_script || w.word, i)}
                           disabled={speakingIdx === i}
                           className="text-muted-foreground hover:text-primary disabled:opacity-40 transition-colors"
                           aria-label={`Phát âm ${w.word}`}
@@ -1685,6 +1711,10 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                         </button>
                       </div>
                       <p className="text-sm text-muted-foreground">{w.phonetic}</p>
+                      {/* Spoken-only mode: the script is reference material, never the lesson */}
+                      {w.thai_script && (
+                        <p className="text-xs text-muted-foreground/50 mt-0.5">{w.thai_script}</p>
+                      )}
                       <p className="text-primary font-medium mt-1">{w.meaning}</p>
                     </div>
                   </div>
@@ -1908,6 +1938,13 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                     </div>
                   );
                 })()}
+
+                <SpeechRateControl
+                  rate={ttsRate}
+                  onChange={setTtsRate}
+                  disabled={isPlayingAudio}
+                  className="rounded-lg border bg-muted/30 p-3"
+                />
 
                 {/* ── Playback controls — always visible ── */}
                 {isPlayingAudio ? (
@@ -2182,6 +2219,13 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
               )}
             </div>
 
+            <SpeechRateControl
+              rate={ttsRate}
+              onChange={setTtsRate}
+              disabled={speakingIdx !== null || micPhraseIdx !== null}
+              className="rounded-lg border bg-muted/30 p-3"
+            />
+
             <div className="grid gap-3">
               {activeLesson.phrases.map((p: any, i: number) => {
                 const result = micResults[i];
@@ -2194,6 +2238,9 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                         <div className="flex-1">
                           <p className="font-bold text-lg">{p.phrase}</p>
                           <p className="text-sm text-muted-foreground">{p.phonetic}</p>
+                          {p.thai_script && (
+                            <p className="text-xs text-muted-foreground/50 mt-0.5">{p.thai_script}</p>
+                          )}
                           <p className="text-primary font-medium mt-1">{p.meaning}</p>
                           {p.context && <p className="text-xs text-muted-foreground/70 mt-1 italic">💬 {p.context}</p>}
                         </div>
@@ -2201,7 +2248,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => speakWord(p.phrase, i)}
+                            onClick={() => speakWord(p.thai_script || p.phrase, i)}
                             disabled={isSpeakingThis || !voiceReady}
                             className="gap-1.5"
                             title={voiceReady ? "Nghe phát âm mẫu" : "Chọn giọng đọc trước"}
@@ -2211,7 +2258,7 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
                           <Button
                             size="sm"
                             variant={isRecording ? "destructive" : "outline"}
-                            onClick={() => isRecording ? stopMic() : startMic(i, p.phrase)}
+                            onClick={() => isRecording ? stopMic() : startMic(i, p.thai_script || p.phrase)}
                             className="gap-1.5"
                           >
                             {isRecording ? (

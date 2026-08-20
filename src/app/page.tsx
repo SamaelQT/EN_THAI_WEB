@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Logo } from "@/components/Logo";
 
 export default async function Home() {
   const session = await auth();
@@ -12,7 +13,7 @@ export default async function Home() {
       {/* Nav */}
       <nav className="flex items-center justify-between px-6 py-4 border-b">
         <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold text-primary">LinguaPath</span>
+          <Logo markClass="h-8 w-8" textClass="text-2xl font-bold" />
           <Badge variant="secondary" className="text-xs">Beta</Badge>
         </div>
         <div className="flex gap-3">

@@ -115,6 +115,7 @@ export async function createRoadmap(
     targetScore?: number | null;
     targetLevel?: string | null;  // user-selected for CEFR / CU-TFL exams
     learningFocus?: string;
+    scriptMode?: string;
     targetDate: string;
     weeklyHours?: number;
     busyDays?: number[];
@@ -130,6 +131,10 @@ export async function createRoadmap(
     busyDays = [],
     learningFocus = "comprehensive",
   } = opts;
+
+  // Only Thai currently offers a script-free track — Hangul and the Latin
+  // alphabet are cheap enough to learn that skipping them isn't worth supporting.
+  const scriptMode = language === "thai" && opts.scriptMode === "romanized" ? "romanized" : "native";
 
   const test = await prisma.placementTest.findUnique({ where: { id: placementTestId } });
   if (!test || test.userId !== userId) throw new RoadmapServiceError("Placement test not found", 404);
@@ -178,7 +183,8 @@ export async function createRoadmap(
     busyDays,
     weeklyHours,
     learningFocus,
-    targetExam ?? "general"
+    targetExam ?? "general",
+    scriptMode
   );
 
   await deleteRoadmapsForLanguage(userId, language);
@@ -192,6 +198,7 @@ export async function createRoadmap(
       currentLevel,
       targetLevel,
       learningFocus,
+      scriptMode,
       startDate: start,
       targetDate: end,
       weeklyHours,

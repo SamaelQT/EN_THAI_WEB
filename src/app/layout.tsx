@@ -7,7 +7,7 @@ import { ThemeProvider } from "next-themes";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
-  title: "LinguaPath – Học Tiếng Anh & Tiếng Thái",
+  title: "LinguaPath – Học Tiếng Anh, Tiếng Thái & Tiếng Hàn",
   description:
     "Nền tảng học ngôn ngữ nghiêm túc: lộ trình cá nhân hóa, bài kiểm tra đầu vào, xã hội hóa học tập.",
 };

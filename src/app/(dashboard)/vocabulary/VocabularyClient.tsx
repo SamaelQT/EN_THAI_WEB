@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, Volume2, Trash2, BookOpen, RotateCcw } from "lucide-react";
+import { useTtsRate } from "@/lib/tts";
+import SpeechRateControl from "@/components/SpeechRateControl";
 
 type VocabItem = {
   id: string;
@@ -44,6 +46,8 @@ function ttsLangOf(language: string) {
 
 export default function VocabularyClient({ defaultLang }: { defaultLang: string }) {
   const [lang, setLang] = useState(defaultLang);
+  // Shared with the lesson screens, so a learner sets their speed once
+  const [ttsRate, setTtsRate] = useTtsRate();
   const [tab, setTab] = useState<"review" | "all">("review");
   const [items, setItems] = useState<VocabItem[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, due: 0, learning: 0, young: 0, mature: 0 });
@@ -88,6 +92,7 @@ export default function VocabularyClient({ defaultLang }: { defaultLang: string 
     const utt = new SpeechSynthesisUtterance(word);
     const target = ttsLangOf(lang);
     utt.lang = target;
+    utt.rate = ttsRate;
     const voice = window.speechSynthesis.getVoices().find((v) => v.lang.startsWith(target.slice(0, 2)));
     if (voice) utt.voice = voice;
     window.speechSynthesis.speak(utt);
@@ -186,6 +191,12 @@ export default function VocabularyClient({ defaultLang }: { defaultLang: string 
           )
         )}
       </div>
+
+      <SpeechRateControl
+        rate={ttsRate}
+        onChange={setTtsRate}
+        className="rounded-lg border bg-muted/30 p-3 max-w-sm"
+      />
 
       {loading ? (
         <div className="py-20 text-center"><Loader2 className="mx-auto animate-spin text-primary" size={32} /></div>

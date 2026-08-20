@@ -29,8 +29,49 @@ The target language is Korean. Every Korean text you write MUST be in real Hangu
   e.g. "-고 싶다 (Diễn tả mong muốn)", "-았/었어요 (Thì quá khứ)", "존댓말 (Kính ngữ)".
 `;
 
-function buildSystemPrompt(language: string): string {
+/**
+ * Rules for learners who chose to speak Thai without learning the script.
+ * Inverts the normal script lock: romanisation becomes the primary text and
+ * Thai characters are demoted to an optional reference, never load-bearing.
+ */
+const THAI_SPOKEN_ONLY_RULES = `
+⚠️⚠️ THAI SPOKEN-ONLY MODE — THE MOST IMPORTANT RULE OF THIS LESSON ⚠️⚠️
+This learner is studying SPOKEN Thai and CANNOT read Thai script. They have deliberately opted out of it.
+- Every Thai text you write MUST be ROMANISED (Latin letters) as the primary content.
+- "word", "phrase", "example", "transcript", "dialogue[].text", "useful_phrases",
+  quiz questions and quiz options → ROMANISED THAI ONLY. Never Thai characters.
+- FORBIDDEN: "word": "สวัสดี" / options: ["กิน","ดื่ม","นอน","ไป"] / transcript with Thai characters
+- CORRECT:   "word": "sà-wàt-dii", "thai_script": "สวัสดี", "meaning": "Xin chào"
+- CORRECT:   quiz options: ["gin", "dùuem", "naawn", "bpai"]
+- TONE MARKS ARE MANDATORY — Thai is tonal and without tones the romanisation is useless.
+  Mark every syllable: à (low), â (falling), á (high), ǎ (rising), a (mid).
+  Write "kâao" not "kao", "mǎa" not "maa", "mâi" not "mai".
+- Vowel length matters: double the vowel for long ones ("dii" not "di", "maa" not "ma").
+- Add a "thai_script" field alongside as an OPTIONAL reference the UI shows in small grey text.
+  The lesson must remain fully usable if that field is ignored entirely.
+- NEVER build a quiz question that requires reading Thai characters to answer.
+- NEVER teach the alphabet, consonant classes, or spelling rules — that is exactly what they opted out of.
+- Focus on: pronunciation, tones, listening, natural spoken phrases, polite particles (khráp/khâ).
+`;
+
+function buildSystemPrompt(language: string, scriptMode = "native"): string {
   const TL = targetLangName(language);
+  const thaiSpokenOnly = language === "thai" && scriptMode === "romanized";
+  if (thaiSpokenOnly) {
+    return `You are an expert Thai teacher creating SPOKEN-Thai lessons for Vietnamese learners who do not read Thai script.
+Output ONLY valid JSON — no markdown wrapper, no extra text before or after.
+${THAI_SPOKEN_ONLY_RULES}
+LANGUAGE RULES:
+- Lesson body (explanations, grammar notes, tips): Vietnamese — learners need L1 support
+- Quiz questions and options: ROMANISED THAI with tone marks — the quiz IS the speaking practice
+- Exception: "meaning" quiz questions ask for Vietnamese translation → options in Vietnamese
+- Every Thai phrase must carry a Vietnamese translation alongside
+- NEVER prefix options with A) B) C) D) — UI adds labels automatically
+- Each option is a clean romanised phrase, never mixing Vietnamese and Thai in one option
+
+TITLE RULE: lesson titles in Vietnamese, optionally with the romanised Thai phrase in parentheses.
+Example: "Gọi món ở quán ăn (sàng aa-hǎan)". Never put Thai characters in the title.`;
+  }
   return `You are an expert language teacher creating structured lessons for Vietnamese learners studying ${TL}.
 Output ONLY valid JSON — no markdown wrapper, no extra text before or after.
 
@@ -67,7 +108,7 @@ TRANSCRIPT RULE: The "transcript" field must contain ONLY ${TL} — no Vietnames
 
 
 type ExamExample = { question: string; options: string[]; answer: number };
-type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string; examType?: string; weekNumber?: number; totalWeeks?: number; dayId?: string; examExamples?: ExamExample[] };
+type GenerateRequest = { lessonType: string; language: string; level: string; topic?: string; examType?: string; weekNumber?: number; totalWeeks?: number; dayId?: string; examExamples?: ExamExample[]; scriptMode?: string };
 
 export function topicToSlug(topic: string): string {
   return topic
@@ -83,14 +124,17 @@ export function topicToSlug(topic: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-function buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId, examExamples }: GenerateRequest): string {
+function buildPrompt({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId, examExamples, scriptMode }: GenerateRequest): string {
   const langLabel = language === "english" ? "tiếng Anh" : language === "korean" ? "tiếng Hàn" : "tiếng Thái";
+  const spokenOnly = language === "thai" && scriptMode === "romanized";
   // TL = name of the target language, injected everywhere a prompt used to hardcode "English"
   const TL = targetLangName(language);
   const isKorean = language === "korean";
   // Script note repeated inside the schema so the model cannot "forget" it after a long prompt
   const scriptNote = isKorean
     ? " — VIẾT BẰNG HANGUL (한글) THẬT, TUYỆT ĐỐI KHÔNG dùng chữ Latinh phiên âm"
+    : spokenOnly
+    ? " — VIẾT BẰNG PHIÊN ÂM LATIN CÓ DẤU THANH (sà-wàt-dii), TUYỆT ĐỐI KHÔNG dùng chữ Thái"
     : "";
 
   // ── Detailed exam format specs ────────────────────────────────────────────
@@ -285,7 +329,7 @@ Each quiz item MUST carry two extra fields, both written in TIẾNG VIỆT:
   "words": [
     {
       "word": "string — từ gốc bằng ${TL}${scriptNote}",
-      "phonetic": "string — ${isKorean ? "phiên âm Revised Romanization (VD: 안녕하세요 → 'annyeonghaseyo'). KHÔNG dùng IPA" : "phiên âm IPA"}",
+      "phonetic": "string — ${isKorean ? "phiên âm Revised Romanization (VD: 안녕하세요 → 'annyeonghaseyo'). KHÔNG dùng IPA" : spokenOnly ? "gợi ý đọc theo âm tiếng Việt (VD: sà-wàt-dii → 'xà-vát-đi')" : "phiên âm IPA"}",${spokenOnly ? `\n      "thai_script": "string — chữ Thái gốc, CHỈ để tham khảo (UI hiển thị mờ, nhỏ). Bài học phải dùng được kể cả khi bỏ qua trường này",` : ""}
       "meaning": "string — nghĩa tiếng Việt chính xác",
       "example": "string — 1 complete example sentence in ${TL} ONLY (no Vietnamese inside the sentence)${scriptNote}, relevant to the topic",
       "example_vi": "string — dịch nghĩa câu ví dụ sang tiếng Việt"
@@ -343,7 +387,7 @@ YÊU CẦU: structure có 4 phần. useful_phrases có 6-8 cụm. Quiz ĐÚNG 10
   "title": "string — tên bài nói cụ thể",
   "topic": "string — chủ đề câu hỏi gợi mở bằng tiếng Việt",
   "phrases": [
-    { "phrase": "string — câu mẫu bằng ${TL}${scriptNote}", "phonetic": "string — ${isKorean ? "phiên âm Revised Romanization" : "phiên âm"}", "meaning": "string — nghĩa tiếng Việt", "usage_tip": "string — gợi ý khi nào dùng câu này" }
+    { "phrase": "string — câu mẫu bằng ${TL}${scriptNote}", "phonetic": "string — ${isKorean ? "phiên âm Revised Romanization" : spokenOnly ? "gợi ý đọc theo âm tiếng Việt" : "phiên âm"}", "meaning": "string — nghĩa tiếng Việt", "usage_tip": "string — gợi ý khi nào dùng câu này"${spokenOnly ? `, "thai_script": "string — chữ Thái gốc, chỉ để tham khảo"` : ""} }
   ],
   "dialogue": [
     { "speaker": "string — A hoặc B", "text": "string — câu nói bằng ${TL}${scriptNote}", "translation": "string — dịch nghĩa tiếng Việt" }
@@ -792,10 +836,10 @@ function parseCachedLesson(content: string, language: string): Record<string, un
 
 // ── Groq helper ────────────────────────────────────────────────────────────
 
-async function callAI(prompt: string, language: string): Promise<{ lesson: any; provider: string; fellBack: boolean }> {
+async function callAI(prompt: string, language: string, scriptMode = "native"): Promise<{ lesson: any; provider: string; fellBack: boolean }> {
   const { data, provider, fellBack } = await generateJson({
     messages: [
-      { role: "system", content: buildSystemPrompt(language) },
+      { role: "system", content: buildSystemPrompt(language, scriptMode) },
       { role: "user", content: prompt },
     ],
     // Slightly above default so repeated lessons on the same topic don't come back identical
@@ -828,7 +872,7 @@ async function fetchExamExamples(examType: string | undefined, lessonType: strin
  * ETS questions are used in /review simulations where topic matching is less critical.
  */
 async function generateLessonContent(req: GenerateRequest): Promise<Record<string, unknown>> {
-  const { lesson, provider, fellBack } = await callAI(buildPrompt(req), req.language);
+  const { lesson, provider, fellBack } = await callAI(buildPrompt(req), req.language, req.scriptMode);
   // Never persist or ship a quiz with malformed questions — the quiz screen assumes
   // options[answer] exists.
   lesson.quiz = sanitizeQuiz(lesson.quiz);
@@ -838,9 +882,14 @@ async function generateLessonContent(req: GenerateRequest): Promise<Record<strin
   return lesson;
 }
 
-export async function generateLesson(lessonType: string, language: string, level: string, topic?: string, userId?: string, examType?: string, weekNumber?: number, totalWeeks?: number, dayId?: string) {
+export async function generateLesson(lessonType: string, language: string, level: string, topic?: string, userId?: string, examType?: string, weekNumber?: number, totalWeeks?: number, dayId?: string, scriptMode?: string) {
   if (!lessonType || !language || !level) throw new Error("Missing fields");
   const examExamples = await fetchExamExamples(examType, lessonType);
+
+  // Spoken-only Thai produces completely different content from the scripted track,
+  // so its cached lessons must live under separate IDs or the two tracks poison each other.
+  const spokenOnly = language === "thai" && scriptMode === "romanized";
+  const scriptSuffix = spokenOnly ? "_rom" : "";
 
   // Roadmap day lesson: each day gets its own unique cached content
   if (dayId) {
@@ -866,7 +915,7 @@ export async function generateLesson(lessonType: string, language: string, level
       throw err;
     }
 
-    const lesson = await generateLessonContent({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId, examExamples });
+    const lesson = await generateLessonContent({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, dayId, examExamples, scriptMode });
 
     if (!alreadyCompleted) {
       await prisma.lesson.upsert({
@@ -882,7 +931,7 @@ export async function generateLesson(lessonType: string, language: string, level
   if (topic) {
     const slug = topicToSlug(topic);
     const examSuffix = examType && examType !== "general" ? `_${examType.toLowerCase()}` : "";
-    const topicId = `${lessonType}_${language}_${level}_${slug}${examSuffix}`;
+    const topicId = `${lessonType}_${language}_${level}_${slug}${examSuffix}${scriptSuffix}`;
 
     const alreadyCompleted = userId
       ? await prisma.lessonProgress.findFirst({ where: { userId, lessonId: topicId } })
@@ -904,7 +953,7 @@ export async function generateLesson(lessonType: string, language: string, level
       throw err;
     }
 
-    const lesson = await generateLessonContent({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, examExamples });
+    const lesson = await generateLessonContent({ lessonType, language, level, topic, examType, weekNumber, totalWeeks, examExamples, scriptMode });
 
     if (!alreadyCompleted) {
       await prisma.lesson.upsert({
@@ -917,34 +966,38 @@ export async function generateLesson(lessonType: string, language: string, level
   }
 
   // No topic: seeded lesson
-  const lessonId = `${lessonType}_${language}_${level}`;
+  const lessonId = `${lessonType}_${language}_${level}${scriptSuffix}`;
   const exact = await prisma.lesson.findUnique({ where: { id: lessonId } });
   if (exact && exact.content !== "{}") {
     const cachedLesson = parseCachedLesson(exact.content, language);
     if (cachedLesson) return cachedLesson;
   }
 
-  const LEVEL_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"];
-  const targetIdx = LEVEL_ORDER.indexOf(level);
-  const fallbacks = await prisma.lesson.findMany({
-    where: { language, type: lessonType, content: { not: "{}" } },
-  });
-  if (fallbacks.length > 0) {
-    const sorted = fallbacks.sort((a, b) => {
-      const da = Math.abs(LEVEL_ORDER.indexOf(a.level) - targetIdx);
-      const db = Math.abs(LEVEL_ORDER.indexOf(b.level) - targetIdx);
-      return da - db;
+  // The level/language fallback chain below would hand a spoken-only learner a
+  // Thai-script lesson, which is precisely what they opted out of. Generate instead.
+  if (!spokenOnly) {
+    const LEVEL_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"];
+    const targetIdx = LEVEL_ORDER.indexOf(level);
+    const fallbacks = await prisma.lesson.findMany({
+      where: { language, type: lessonType, content: { not: "{}" } },
     });
-    for (const candidate of sorted) {
-      const cachedLesson = parseCachedLesson(candidate.content, language);
+    if (fallbacks.length > 0) {
+      const sorted = fallbacks.sort((a, b) => {
+        const da = Math.abs(LEVEL_ORDER.indexOf(a.level) - targetIdx);
+        const db = Math.abs(LEVEL_ORDER.indexOf(b.level) - targetIdx);
+        return da - db;
+      });
+      for (const candidate of sorted) {
+        const cachedLesson = parseCachedLesson(candidate.content, language);
+        if (cachedLesson) return cachedLesson;
+      }
+    }
+
+    const anyLesson = await prisma.lesson.findFirst({ where: { language, content: { not: "{}" } } });
+    if (anyLesson) {
+      const cachedLesson = parseCachedLesson(anyLesson.content, language);
       if (cachedLesson) return cachedLesson;
     }
-  }
-
-  const anyLesson = await prisma.lesson.findFirst({ where: { language, content: { not: "{}" } } });
-  if (anyLesson) {
-    const cachedLesson = parseCachedLesson(anyLesson.content, language);
-    if (cachedLesson) return cachedLesson;
   }
 
   if (!process.env.GROQ_API_KEY) {
@@ -953,7 +1006,7 @@ export async function generateLesson(lessonType: string, language: string, level
     throw err;
   }
 
-  const lesson = await generateLessonContent({ lessonType, language, level, examExamples });
+  const lesson = await generateLessonContent({ lessonType, language, level, examExamples, scriptMode });
   await prisma.lesson.upsert({
     where: { id: lessonId },
     update: { content: JSON.stringify(lesson), title: String(lesson.title ?? lessonId) },
