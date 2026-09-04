@@ -5,6 +5,23 @@ import { prisma } from "./db";
 import bcrypt from "bcryptjs";
 import { authConfig } from "./auth.config";
 
+/**
+ * Keep base64 data URIs out of the JWT.
+ *
+ * Avatars used to be stored as `data:image/jpeg;base64,...` on `User.image`. Such a
+ * value is hundreds of kilobytes, and putting it in the token makes the session cookie
+ * so large that the reverse proxy rejects the response header outright — the browser
+ * sees a 502 with an HTML body, and login fails with no usable error. Only successful
+ * logins hit this, since a failed one never builds a token.
+ *
+ * Legacy rows have been migrated to `/api/avatars/<id>`, but one bad row must never be
+ * able to lock an account out again, so drop anything that isn't a short URL.
+ */
+function safeAvatar(image: string | null | undefined): string | null {
+  if (!image || image.startsWith("data:") || image.length > 512) return null;
+  return image;
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   trustHost: true,
@@ -29,7 +46,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id;
         token.email = user.email;
         token.name = user.name;
-        token.picture = user.image ?? null;
+        token.picture = safeAvatar(user.image);
         token.profileSyncedAt = Date.now();
         return token;
       }
@@ -45,7 +62,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           });
           if (fresh) {
             token.name = fresh.name;
-            token.picture = fresh.image;
+            token.picture = safeAvatar(fresh.image);
           }
           token.profileSyncedAt = Date.now();
         } catch {
