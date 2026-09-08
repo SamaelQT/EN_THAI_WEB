@@ -254,10 +254,17 @@ export async function getOrGenerateReviewSet(
   // exact same paper. We build up to MAX_VARIANTS different papers, then serve a
   // random one with its questions reshuffled.
   const MAX_VARIANTS = 4;
-  const cached = await prisma.reviewSet.findMany({
-    where: { language, type, topic, level },
-    include: { questions: { orderBy: { order: "asc" } } },
-  });
+  const count = QUESTION_COUNT[type];
+  // Same floor used when deciding whether a fresh generation needs a retry (see below) —
+  // reused here so a short set cached before that fix isn't served forever either. Rows
+  // that don't qualify are simply never picked; they're left in place rather than deleted.
+  const minAcceptable = Math.min(count, Math.max(8, Math.ceil(count / 2)));
+  const cached = (
+    await prisma.reviewSet.findMany({
+      where: { language, type, topic, level },
+      include: { questions: { orderBy: { order: "asc" } } },
+    })
+  ).filter((set) => set.questions.length >= minAcceptable);
 
   const pickCached = () => {
     const chosen = cached[Math.floor(Math.random() * cached.length)];
@@ -284,8 +291,6 @@ export async function getOrGenerateReviewSet(
   }
 
   // ── Generate via Groq ─────────────────────────────────────────────────────
-
-  const count = QUESTION_COUNT[type];
 
   // For grammar/vocab review: personalize by including user's studied topics in prompt
   let personalContext = "";
@@ -343,10 +348,8 @@ export async function getOrGenerateReviewSet(
   // Same failure mode as lesson generation (see the matching comment in lesson.service.ts's
   // generateLessonContent): the model can burn most of its completion budget on hidden
   // reasoning and hand back a JSON-valid but far-too-short question list. Below half of
-  // what was asked (floor 8) is treated as a failed attempt and retried once, keeping
-  // whichever of the two actually has more usable questions.
-  const minAcceptable = Math.min(count, Math.max(8, Math.ceil(count / 2)));
-
+  // what was asked (floor 8, computed above as minAcceptable) is treated as a failed
+  // attempt and retried once, keeping whichever of the two actually has more questions.
   let result = await attemptGenerate();
   if (!result || result.sanitized.length < minAcceptable) {
     console.warn(

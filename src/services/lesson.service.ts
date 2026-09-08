@@ -792,7 +792,24 @@ export function sanitizeQuiz(raw: unknown): QuizItem[] {
   return out;
 }
 
-// ── Korean cache validation ────────────────────────────────────────────────
+// ── Cache validation ─────────────────────────────────────────────────────────
+
+// Every quiz spec in buildPrompt() asks for EXACTLY 10 questions. A handful missing to
+// sanitizeQuiz filtering (a dropped duplicate, one malformed item) is normal; anything
+// below this means the generation that produced this cached row ran out of room before
+// finishing — the same failure the reasoning_effort/maxTokens fix addresses for new
+// generations. Reused here so a broken row from before that fix doesn't keep serving.
+const MIN_ACCEPTABLE_QUIZ = 7;
+
+/**
+ * True when a cached lesson's quiz is a plausible 10-question set rather than a
+ * generation that was cut short. A short-but-JSON-valid quiz used to be indistinguishable
+ * from a real one and, once cached, was served to every learner who opened that exact
+ * topic/level/type — this is what let one bad generation poison a lesson forever.
+ */
+function quizLooksComplete(lesson: Record<string, unknown>): boolean {
+  return Array.isArray(lesson.quiz) && lesson.quiz.length >= MIN_ACCEPTABLE_QUIZ;
+}
 
 const HANGUL_RE = /[가-힯ᄀ-ᇿ㄰-㆏]/;
 
@@ -831,6 +848,7 @@ function parseCachedLesson(content: string, language: string): Record<string, un
     return null;
   }
   if (language === "korean" && !koreanLessonHasHangul(parsed)) return null;
+  if (!quizLooksComplete(parsed)) return null;
   return parsed;
 }
 
@@ -875,10 +893,6 @@ async function fetchExamExamples(examType: string | undefined, lessonType: strin
  * e.g. topic "Past Simple" → keyword "past" → accidentally pulls past_perfect, past_continuous questions.
  * ETS questions are used in /review simulations where topic matching is less critical.
  */
-// Every quiz spec in buildPrompt() asks for EXACTLY 10 questions. A handful missing to
-// sanitizeQuiz filtering (a dropped duplicate, one malformed item) is normal; anything
-// below this is the model running out of room mid-generation, not ordinary noise.
-const MIN_ACCEPTABLE_QUIZ = 7;
 
 async function generateLessonContent(req: GenerateRequest): Promise<Record<string, unknown>> {
   // A short-but-valid quiz used to be indistinguishable from a real one and got cached
