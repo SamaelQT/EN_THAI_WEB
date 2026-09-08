@@ -1,5 +1,5 @@
 import Groq from "groq-sdk";
-import { MODEL_QUALITY, MODEL_FAST, isModelGoneError } from "./ai-models";
+import { MODEL_QUALITY, MODEL_FAST, isModelGoneError, modelAcceptsReasoningEffort, extractProviderError } from "./ai-models";
 
 /**
  * One AI entry point for the whole app, with failover.
@@ -65,13 +65,13 @@ const recentFailures: ProviderFailure[] = [];
 const MAX_RECENT = 20;
 
 function describeError(provider: Provider, e: unknown): ProviderFailure {
-  const err = e as { status?: number; message?: string; error?: { code?: string; message?: string } };
+  const { status, code, message } = extractProviderError(e);
   return {
     at: new Date().toISOString(),
     provider,
-    status: err?.status,
-    code: err?.error?.code,
-    message: (err?.error?.message ?? err?.message ?? String(e)).slice(0, 500),
+    status,
+    code,
+    message: message.slice(0, 500),
     modelGone: isModelGoneError(e) || undefined,
   };
 }
@@ -124,19 +124,47 @@ type CallOpts = {
   json?: boolean;
   /** Use the low-latency model where the provider has one */
   fast?: boolean;
+  /**
+   * Groq's gpt-oss models spend a large, variable number of hidden "reasoning" tokens
+   * before writing their actual answer — measured up to 2250 tokens (63% of the whole
+   * completion) reasoning about a 10-item vocabulary quiz. Against this account's tight
+   * per-minute token budget, that reasoning burn was eating the room the model needed to
+   * finish the JSON: lesson generation was silently coming back with 2-4 quiz questions
+   * instead of the 10 asked for, sometimes with a truncated final item, sometimes with
+   * output too broken to parse at all — reproduced live against Korean vocabulary,
+   * grammar, and listening lessons.
+   *
+   * Structured content generation (json: true) does not benefit from step-by-step
+   * reasoning the way an open-ended question would, so it defaults to "low" here unless
+   * the caller overrides it. Verified: two consecutive runs at "low" both returned the
+   * full 10/10 words and quiz items while using roughly a third fewer total tokens than
+   * the model's own default reasoning depth.
+   */
+  reasoningEffort?: "low" | "medium" | "high";
 };
 
 async function callGroq(opts: CallOpts): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw Object.assign(new Error("GROQ_API_KEY not configured"), { status: 503 });
 
+  const model = opts.fast ? MODEL_FAST : MODEL_QUALITY;
+
+  // Only sent when the configured model is known to accept the low/medium/high values —
+  // Groq rejects the whole request with a 400 if a model doesn't recognise them (e.g.
+  // qwen only takes none/default), so an unrecognised model just skips the param.
+  const effort = opts.reasoningEffort ?? (opts.json ? "low" : undefined);
+  const reasoningParam: { reasoning_effort?: "low" | "medium" | "high" } =
+    effort && modelAcceptsReasoningEffort(model) ? { reasoning_effort: effort } : {};
+
   const groq = new Groq({ apiKey });
   const res = await groq.chat.completions.create({
-    model: opts.fast ? MODEL_FAST : MODEL_QUALITY,
+    model,
     messages: opts.messages,
     temperature: opts.temperature,
+    stream: false,
     ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
     ...(opts.json ? { response_format: { type: "json_object" as const } } : {}),
+    ...reasoningParam,
   });
   return res.choices[0]?.message?.content ?? "";
 }
@@ -225,8 +253,16 @@ const IMPLS: Record<Provider, (o: CallOpts) => Promise<string>> = {
  * falling over just burns quota and hides the real bug.
  */
 function isWorthFallingBackFrom(e: unknown): boolean {
-  const status = (e as { status?: number })?.status;
-  return status !== 400;
+  const { status, code } = extractProviderError(e);
+  if (status !== 400) return true;
+
+  // Groq returns 400 json_validate_failed when the MODEL's own output didn't parse as
+  // JSON — typically because it ran out of room mid-generation against this account's
+  // tight per-minute token budget and got cut off before closing its braces. That is a
+  // model/capacity failure, not "we sent Groq a malformed request", so it is worth
+  // falling back on: reproduced live, where this exact error on a Korean speaking lesson
+  // left the request completely unusable until this exemption was added.
+  return code === "json_validate_failed";
 }
 
 function fallbackChain(): Provider[] {

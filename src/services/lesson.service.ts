@@ -844,6 +844,10 @@ async function callAI(prompt: string, language: string, scriptMode = "native"): 
     ],
     // Slightly above default so repeated lessons on the same topic don't come back identical
     temperature: 0.8,
+    // A full lesson (content + 10 explained quiz items) runs 4000-6000 completion tokens
+    // even at low reasoning effort; leave real headroom so the model is never forced to
+    // cut the quiz short to fit.
+    maxTokens: 8000,
   });
   return { lesson: JSON.parse(data || "{}"), provider, fellBack };
 }
@@ -871,11 +875,42 @@ async function fetchExamExamples(examType: string | undefined, lessonType: strin
  * e.g. topic "Past Simple" → keyword "past" → accidentally pulls past_perfect, past_continuous questions.
  * ETS questions are used in /review simulations where topic matching is less critical.
  */
+// Every quiz spec in buildPrompt() asks for EXACTLY 10 questions. A handful missing to
+// sanitizeQuiz filtering (a dropped duplicate, one malformed item) is normal; anything
+// below this is the model running out of room mid-generation, not ordinary noise.
+const MIN_ACCEPTABLE_QUIZ = 7;
+
 async function generateLessonContent(req: GenerateRequest): Promise<Record<string, unknown>> {
-  const { lesson, provider, fellBack } = await callAI(buildPrompt(req), req.language, req.scriptMode);
-  // Never persist or ship a quiz with malformed questions — the quiz screen assumes
-  // options[answer] exists.
-  lesson.quiz = sanitizeQuiz(lesson.quiz);
+  // A short-but-valid quiz used to be indistinguishable from a real one and got cached
+  // forever under generateLesson()'s upsert — every learner who opened that exact
+  // topic/level/type afterwards got the same broken 2-question lesson. Reproduced live
+  // against Korean vocabulary/grammar/listening: quiz.length came back 2, 2 and 6 (one
+  // item truncated mid-object) against a spec asking for 10, with usage data showing the
+  // model burning up to 63% of its completion budget on hidden reasoning tokens before it
+  // ran out of room to finish the JSON. Lowering that reasoning effort (ai-client.ts) and
+  // raising maxTokens fixes most of it; this retry catches whatever still slips through.
+  let attempt = await callAI(buildPrompt(req), req.language, req.scriptMode);
+  attempt.lesson.quiz = sanitizeQuiz(attempt.lesson.quiz);
+
+  if (attempt.lesson.quiz.length < MIN_ACCEPTABLE_QUIZ) {
+    console.warn(
+      `[lesson.service] short quiz (${attempt.lesson.quiz.length}/10) for ${req.lessonType}/${req.language}/${req.level}` +
+      `${req.topic ? ` "${req.topic}"` : ""} via ${attempt.provider} — retrying once`
+    );
+    const retry = await callAI(buildPrompt(req), req.language, req.scriptMode);
+    retry.lesson.quiz = sanitizeQuiz(retry.lesson.quiz);
+    // Keep whichever attempt actually has more usable questions — never let a worse
+    // retry throw away a result that was already good enough.
+    if (retry.lesson.quiz.length > attempt.lesson.quiz.length) attempt = retry;
+    if (attempt.lesson.quiz.length < MIN_ACCEPTABLE_QUIZ) {
+      console.error(
+        `[lesson.service] quiz still short after retry (${attempt.lesson.quiz.length}/10) for ` +
+        `${req.lessonType}/${req.language}/${req.level}${req.topic ? ` "${req.topic}"` : ""} — serving anyway`
+      );
+    }
+  }
+
+  const { lesson, provider, fellBack } = attempt;
   // Non-enumerable so it never lands in the cached JSON we write to the database
   Object.defineProperty(lesson, "_aiProvider", { value: provider, enumerable: false });
   Object.defineProperty(lesson, "_aiFellBack", { value: fellBack, enumerable: false });

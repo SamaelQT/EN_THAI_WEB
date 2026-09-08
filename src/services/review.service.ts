@@ -306,33 +306,64 @@ export async function getOrGenerateReviewSet(
 
   const prompt = buildPrompt(language, type, topic, level, count) + personalContext + avoidContext;
 
-  const { data: text } = await generateJson({
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.9,
-  });
+  type Sanitized = ReturnType<typeof sanitizeQuiz>;
+  async function attemptGenerate(): Promise<{ parsed: Record<string, unknown>; sanitized: Sanitized } | null> {
+    const { data: text } = await generateJson({
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.9,
+      // Review sets run up to 35 explained questions (quiz_30, simulation_*) — needs more
+      // room than a single lesson's quiz.
+      maxTokens: 12000,
+    });
 
-  let parsed: { title?: unknown; description?: unknown; questions?: unknown };
-  try {
-    parsed = JSON.parse(text);
-  } catch {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return null;
+    }
+
+    // Drop malformed items — a question with a missing option list or an out-of-range
+    // answer index renders as an unanswerable blank in the quiz screen.
+    const sanitized = sanitizeQuiz(
+      (Array.isArray(parsed.questions) ? parsed.questions : []).map((q) => {
+        const item = q as Record<string, unknown>;
+        return {
+          q: item.question,
+          options: item.options,
+          answer: item.answer,
+          explanation: item.explanation,
+          why_wrong: item.why_wrong,
+        };
+      })
+    );
+    return { parsed, sanitized };
+  }
+
+  // Same failure mode as lesson generation (see the matching comment in lesson.service.ts's
+  // generateLessonContent): the model can burn most of its completion budget on hidden
+  // reasoning and hand back a JSON-valid but far-too-short question list. Below half of
+  // what was asked (floor 8) is treated as a failed attempt and retried once, keeping
+  // whichever of the two actually has more usable questions.
+  const minAcceptable = Math.min(count, Math.max(8, Math.ceil(count / 2)));
+
+  let result = await attemptGenerate();
+  if (!result || result.sanitized.length < minAcceptable) {
+    console.warn(
+      `[review.service] short question set (${result?.sanitized.length ?? 0}/${count}) for ` +
+      `${type}/${language}/${topic}/${level} — retrying once`
+    );
+    const retry = await attemptGenerate();
+    if (retry && (!result || retry.sanitized.length > result.sanitized.length)) result = retry;
+  }
+
+  if (!result) {
     if (cached.length > 0) return pickCached();
     throw new Error("AI trả về dữ liệu không hợp lệ");
   }
 
-  // Drop malformed items — a question with a missing option list or an out-of-range
-  // answer index renders as an unanswerable blank in the quiz screen.
-  const questions = sanitizeQuiz(
-    (Array.isArray(parsed.questions) ? parsed.questions : []).map((q) => {
-      const item = q as Record<string, unknown>;
-      return {
-        q: item.question,
-        options: item.options,
-        answer: item.answer,
-        explanation: item.explanation,
-        why_wrong: item.why_wrong,
-      };
-    })
-  ).map((q, i) => ({
+  const { parsed, sanitized } = result;
+  const questions = sanitized.map((q, i) => ({
     order: i + 1,
     question: q.q,
     options: q.options,
@@ -344,6 +375,12 @@ export async function getOrGenerateReviewSet(
   if (questions.length === 0) {
     if (cached.length > 0) return pickCached();
     throw new Error("AI không tạo được câu hỏi hợp lệ");
+  }
+  if (questions.length < minAcceptable) {
+    console.error(
+      `[review.service] question set still short after retry (${questions.length}/${count}) for ` +
+      `${type}/${language}/${topic}/${level} — serving anyway`
+    );
   }
 
   const reviewSet = await prisma.reviewSet.create({

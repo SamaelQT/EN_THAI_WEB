@@ -65,6 +65,7 @@ Rules:
   try {
     const { data, provider, fellBack } = await generateJson({
       messages: [{ role: "user", content: evalPrompt }],
+      maxTokens: 2000,
     });
 
     const parsed = JSON.parse(data || "{}") as Record<string, unknown>;

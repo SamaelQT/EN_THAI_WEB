@@ -102,6 +102,8 @@ Rules:
       messages: [{ role: "user", content: prompt }],
       // Higher temperature so retaking the checkpoint doesn't return the same paper
       temperature: 0.9,
+      // Up to 20 explained questions — give it room so it isn't cut short mid-quiz.
+      maxTokens: 10000,
     });
   } catch {
     return NextResponse.json({ error: "Không kết nối được AI. Thử lại sau." }, { status: 503 });
