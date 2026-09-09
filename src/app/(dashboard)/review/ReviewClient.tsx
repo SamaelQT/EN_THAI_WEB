@@ -586,8 +586,13 @@ export default function ReviewClient({ initialSets, userId }: Props) {
             </div>
           ) : (
             savedEntries.map((entry) => {
-              const langColor = entry.language === "english" ? "bg-blue-500" : "bg-red-500";
-              const langLabel = entry.language === "english" ? "EN" : "TH";
+              const LANG_BADGE: Record<string, { color: string; label: string }> = {
+                english: { color: "bg-blue-500", label: "EN" },
+                thai: { color: "bg-red-500", label: "TH" },
+                korean: { color: "bg-violet-500", label: "KR" },
+              };
+              const langColor = LANG_BADGE[entry.language]?.color ?? "bg-gray-400";
+              const langLabel = LANG_BADGE[entry.language]?.label ?? entry.language.slice(0, 2).toUpperCase();
               return (
                 <div
                   key={entry.id}

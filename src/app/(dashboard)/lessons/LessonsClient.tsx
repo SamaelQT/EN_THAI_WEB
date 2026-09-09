@@ -218,6 +218,48 @@ export default function LessonsClient({ enRoadmap, thRoadmap, krRoadmap, lessonD
     window.speechSynthesis.onvoiceschanged = load;
   }, []);
 
+  /**
+   * Deep-link from a "Kế hoạch cấp tốc" (Cram Plan) block — `?startBlock=<id>`.
+   *
+   * Reads the query string directly instead of `useSearchParams()` so this file doesn't
+   * need to be wrapped in a `<Suspense>` boundary just for a one-shot read on mount.
+   * Deliberately reuses `openLesson()`/the existing conversation state rather than
+   * rendering anything new — the cram plan feature owns none of this screen's rendering.
+   */
+  const startBlockHandledRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || startBlockHandledRef.current) return;
+    const blockId = new URLSearchParams(window.location.search).get("startBlock");
+    if (!blockId) return;
+    startBlockHandledRef.current = true;
+    // Strip the param immediately so a refresh/back-nav doesn't relaunch the same block
+    router.replace("/lessons");
+
+    fetch(`/api/cram-plan/blocks/${blockId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.error || !data.link) { toast.error(data.error ?? "Không tìm thấy việc cần làm"); return; }
+        const link = data.link as {
+          language: string; level: string; linkType: string;
+          linkLessonType: string | null; linkTopic: string | null;
+          linkExamType: string | null; linkScenario: string | null;
+        };
+        setLang(link.language);
+        if (link.linkType === "lesson" && link.linkLessonType) {
+          openLesson(link.linkLessonType, link.language, link.level, undefined, link.linkTopic ?? undefined, link.linkExamType ?? undefined);
+        } else if (link.linkType === "conversation") {
+          setConvScenario(link.linkScenario ?? "friend");
+          setConvLevel(link.level);
+          setConvMessages([]);
+          setLessonState("conversation");
+        } else if (link.linkType === "review") {
+          router.push("/review");
+        }
+      })
+      .catch(() => toast.error("Không mở được việc cần làm từ kế hoạch cấp tốc."));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (lessonState !== "conversation" || convMessages.length > 0) return;
     // AI nói trước khi user bắt đầu

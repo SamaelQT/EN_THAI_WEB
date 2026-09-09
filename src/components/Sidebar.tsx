@@ -20,6 +20,7 @@ import {
   Database,
   Layers,
   TrendingUp,
+  Zap,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -29,6 +30,7 @@ const nav = [
   { href: "/placement", label: "Kiểm tra đầu vào", icon: FlaskConical },
   { href: "/roadmap", label: "Lộ trình", icon: Map },
   { href: "/lessons", label: "Bài học", icon: BookOpen },
+  { href: "/cram-plan", label: "Kế hoạch cấp tốc", icon: Zap },
   { href: "/review", label: "Ôn tập", icon: GraduationCap },
   { href: "/vocabulary", label: "Sổ từ vựng", icon: Layers },
   { href: "/progress", label: "Tiến độ", icon: TrendingUp },

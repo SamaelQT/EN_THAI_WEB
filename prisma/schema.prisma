@@ -53,6 +53,7 @@ model User {
   quizAttempts         QuizAttempt[]
   vocabularyItems      VocabularyItem[]
   avatar               UserAvatar?
+  cramPlans            CramPlan[]
 }
 
 // ─── Avatar ──────────────────────────────────────────────────────────────────
@@ -430,7 +431,7 @@ model ExamQuestion {
 
 model ReviewSet {
   id          String   @id @default(cuid()) @map("_id")
-  language    String   // english | thai
+  language    String   // english | thai | korean
   // vocabulary | grammar | quiz_15 | quiz_30 | simulation_b1 | simulation_toeic
   type        String
   topic       String   // e.g. "travel", "past_simple", "random_vocab"
@@ -456,6 +457,59 @@ model ReviewQuestion {
   whyWrong    String[] @default([])
 
   reviewSet ReviewSet @relation(fields: [reviewSetId], references: [id], onDelete: Cascade)
+}
+
+// ─── Cram Plan / Kế hoạch cấp tốc ────────────────────────────────────────────
+// Short-horizon (hours to ~2 days), goal-driven study plan — deliberately separate
+// from Roadmap (week-granularity, requires a completed PlacementTest first, driven by
+// large week-theme banks). A cram plan needs neither: block durations are computed
+// deterministically from however much time the learner actually has right now.
+
+model CramPlan {
+  id           String    @id @default(cuid()) @map("_id")
+  userId       String
+  language     String    // english | thai | korean
+  goalType     String    // exam | upcoming_need | skill_push
+  goalLabel    String    // "VSTEP B1", "Phỏng vấn xin việc", ...
+  examType     String?   // VSTEP | TOEIC | IELTS | TOPIK | CUTFL | null
+  level        String
+  skills       String[]  // subset of vocabulary|grammar|reading|listening|speaking|writing|conversation
+  targetAt     DateTime
+  totalMinutes Int
+  status       String    @default("active") // active | done — recomputed on every block PATCH
+  introBlurb   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  blocks CramBlock[]
+
+  @@index([userId, status])
+}
+
+model CramBlock {
+  id             String    @id @default(cuid()) @map("_id")
+  planId         String
+  order          Int
+  skill          String
+  title          String
+  goalText       String
+  durationMin    Int
+  checklist      String[]
+  // Parallel to checklist. A block is "done" when every item here is true and the
+  // checklist is non-empty — info-only blocks (e.g. "Ngủ") have an empty checklist and
+  // never count toward progress.
+  checklistDone  Boolean[] @default([])
+  template       String?   // markdown: mẫu câu / khung bài / kỹ thuật
+  linkType       String    // lesson | conversation | review | none
+  linkLessonType String?   // set when linkType = "lesson"
+  linkTopic      String?   // free text, passed straight into generateLesson()'s topic param
+  linkExamType   String?
+  linkScenario   String?   // conversation scenario id, when linkType = "conversation"
+
+  plan CramPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId, order])
 }
 
 // ─── Group Quiz ───────────────────────────────────────────────────────────────

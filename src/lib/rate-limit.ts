@@ -60,6 +60,8 @@ export const AI_LIMITS = {
   writingFeedback:{ limit: 15, windowMs: 10 * 60_000 },
   /** Checkpoint + review set generation */
   quizGenerate:   { limit: 15, windowMs: 10 * 60_000 },
+  /** Creating a cram plan — infrequent, but a real cap since it makes one AI call */
+  cramPlanGenerate: { limit: 10, windowMs: 10 * 60_000 },
 } as const;
 
 /** Convenience wrapper: returns null when allowed, or a 429 Response when not. */
